@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import type { NavItem } from "@/lib/nav-shared";
+import { Copyright } from "@/components/copyright";
 import { LogoutButton } from "@/components/logout-button";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { NoticeToast } from "@/components/notice-toast";
@@ -136,6 +137,9 @@ export function ShellFrame({
         <main className="app-scroll min-h-0 flex-1 overflow-y-auto">
           <div className="px-4 py-5 sm:px-6 sm:py-6">{children}</div>
         </main>
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-2">
+          <Copyright />
+        </footer>
       </div>
       <NoticeToast />
     </div>

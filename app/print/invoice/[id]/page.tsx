@@ -26,10 +26,8 @@ export default async function PrintInvoicePage({ params }: { params: { id: strin
         <div className="mb-4 flex justify-between gap-6">
           <div>
             <p className="text-base font-bold">INVOICE</p>
-            <p>
-              {tenant.kotaSurat}, {formatWibLong(invoice.tanggalInvoice)}
-            </p>
             <p>No. Invoice : {invoice.noInvoice}</p>
+            <p>Tanggal : {formatWibLong(invoice.tanggalInvoice)}</p>
             <p>No. PO : {invoice.noPo || "-"}</p>
             <p>
               Tgl. Jatuh Tempo :{" "}

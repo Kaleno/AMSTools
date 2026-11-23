@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Copyright } from "@/components/copyright";
 
 export const metadata = {
   title: "Offline · AMS Tools",
@@ -6,8 +7,9 @@ export const metadata = {
 
 export default function OfflinePage() {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-surface px-4">
-      <div className="panel w-full max-w-md px-8 py-10 text-center">
+    <main className="flex min-h-dvh flex-col bg-surface px-4 py-8">
+      <div className="flex flex-1 items-center justify-center">
+        <div className="panel w-full max-w-md px-8 py-10 text-center">
         <p className="text-xs font-semibold uppercase tracking-wider text-steel">AMS Tools</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Tidak ada jaringan</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
@@ -19,7 +21,9 @@ export default function OfflinePage() {
         >
           Coba buka dashboard
         </Link>
+        </div>
       </div>
+      <Copyright className="pt-6 text-center text-xs text-slate-400" />
     </main>
   );
 }

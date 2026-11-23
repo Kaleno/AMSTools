@@ -30,10 +30,8 @@ export default async function PrintSuratJalanPage({ params }: { params: { id: st
         <div className="mb-3 flex justify-between gap-6">
           <div>
             <p className="text-base font-bold">SURAT JALAN</p>
-            <p>
-              {tenant.kotaSurat}, {formatWibLong(sj.tanggalSuratJalan)}
-            </p>
             <p>No. Surat Jalan : {sj.noSuratJalan}</p>
+            <p>Tanggal : {formatWibLong(sj.tanggalSuratJalan)}</p>
             <p>No. PO : {sj.noPo || "-"}</p>
           </div>
           <div>
