@@ -1,0 +1,105 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/current-user";
+import { formatWibLong } from "@/lib/datetime";
+import { BackLink, MetaGrid, PageHeader, SecondaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { ProofForm } from "./proof-form";
+
+export default async function SuratJalanDetailPage({ params }: { params: { id: string } }) {
+  const current = await requirePermission("canManageSuratJalan");
+  const sj = await prisma.suratJalan.findFirst({
+    where: { id: params.id, tenantId: current.tenant.id },
+    include: {
+      items: true,
+      createdBy: true,
+      invoice: { include: { customer: true } },
+    },
+  });
+  if (!sj) notFound();
+
+  const received = sj.statusPengiriman === "DITERIMA";
+  const meta = [
+    { label: "Tanggal", value: formatWibLong(sj.tanggalSuratJalan) },
+    { label: "No. PO", value: sj.noPo || "—" },
+    { label: "Dibuat oleh", value: sj.createdBy.name },
+    { label: "Invoice", value: sj.invoice.noInvoice },
+  ];
+  if (sj.tanggalDiterima) {
+    meta.push({ label: "Diterima", value: formatWibLong(sj.tanggalDiterima) });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <BackLink href="/surat-jalan">Surat Jalan</BackLink>
+        <PageHeader
+          title={sj.noSuratJalan}
+          description={`${sj.invoice.customer.namaPt} · Invoice ${sj.invoice.noInvoice}`}
+          action={
+            <>
+              <SecondaryLink href={`/print/surat-jalan/${sj.id}`}>Cetak</SecondaryLink>
+              <SecondaryLink href={`/invoices/${sj.invoiceId}`}>Lihat invoice</SecondaryLink>
+            </>
+          }
+        />
+        <span
+          className={
+            received
+              ? "inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/15"
+              : "inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/15"
+          }
+        >
+          {received ? "Diterima" : "Dikirim · menunggu bukti"}
+        </span>
+      </div>
+
+      <MetaGrid items={meta} />
+
+      <TableWrap>
+        <table className={tableClass}>
+          <thead className={theadClass}>
+            <tr>
+              <th className={thClass}>Nama Barang</th>
+              <th className={thClass}>Qty</th>
+              <th className={thClass}>Satuan</th>
+              <th className={thClass}>Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sj.items.map((item) => (
+              <tr key={item.id} className={trClass}>
+                <td className={tdClass}>{item.namaProduk}</td>
+                <td className={`${tdClass} tabular-nums`}>{item.qty}</td>
+                <td className={tdClass}>{item.satuan}</td>
+                <td className={tdClass}>{item.keterangan || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+
+      <section className="panel p-5">
+        <h2 className="text-sm font-semibold text-slate-900">{received ? "Foto bukti" : "Bukti terima"}</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {received ? "Foto tanda terima yang sudah diunggah." : "Ambil foto surat jalan yang sudah ditandatangani penerima."}
+        </p>
+        {sj.buktiTerimaUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/media/${sj.buktiTerimaUrl}?v=${sj.updatedAt.getTime()}`}
+            alt="Bukti terima"
+            className="mt-4 max-h-96 w-full rounded-lg border border-slate-200 object-contain"
+          />
+        ) : null}
+        <div className="mt-4">
+          <ProofForm suratJalanId={sj.id} replace={Boolean(sj.buktiTerimaUrl)} />
+        </div>
+      </section>
+
+      <Link href={`/invoices/${sj.invoiceId}`} className="inline-block text-sm font-medium text-steel hover:text-steel-dark">
+        Buka invoice terkait
+      </Link>
+    </div>
+  );
+}

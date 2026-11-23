@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id       String  @id @default(cuid())
+  namaPt   String
+  tagline  String?
+  alamatPt String  @db.Text
+  telpPt   String
+  npwpPt   String?
+  logoUrl  String?
+  kotaSurat String @default("Cikarang")
+  isActive Boolean @default(true)
+
+  ppnPercentage    Float  @default(11.0)
+  invoicePrefix    String @default("AMS/CKR/")
+  bankInfo         String? @db.Text
+  invoiceSignatory String  @default("Dody Heryanto")
+  invoiceFooterNote String? @db.Text
+  sjFooterNote      String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  customers   Customer[]
+  products    Product[]
+  invoices    Invoice[]
+  suratJalans SuratJalan[]
+}
+
+model User {
+  id           String  @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name         String
+  email        String  @unique
+  passwordHash String
+  role         String
+  isActive     Boolean @default(true)
+
+  canViewDashboard    Boolean @default(true)
+  canManageInvoice    Boolean @default(false)
+  canManageSuratJalan Boolean @default(false)
+  canManageMasterData Boolean @default(false)
+  canViewReports      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdInvoices    Invoice[]    @relation("InvoiceCreator")
+  updatedInvoices    Invoice[]    @relation("InvoiceUpdater")
+  createdSuratJalans SuratJalan[] @relation("SjCreator")
+  paidInvoices       Invoice[]    @relation("InvoicePaidBy")
+}
+
+model Customer {
+  id               String  @id @default(cuid())
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  namaPt           String
+  picName          String?
+  noTelp           String
+  email            String?
+  alamatPengiriman String  @db.Text
+  npwp             String?
+  catatan          String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices Invoice[]
+}
+
+model Product {
+  id           String  @id @default(cuid())
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  kodeProduk   String?
+  namaProduk   String
+  satuan       String  @default("Pcs")
+  hargaDefault Float   @default(0)
+  keterangan   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoiceItems InvoiceItem[]
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  noInvoice      String
+  noPo           String?
+  tanggalInvoice DateTime @default(now())
+  statusDokumen  String   @default("AKTIF")
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  metodePembayaran  String
+  statusPembayaran  String
+  statusPengiriman  String    @default("BELUM_DIKIRIM")
+  tanggalJatuhTempo DateTime?
+  tanggalLunas      DateTime?
+  lunasById         String?
+  lunasBy           User?     @relation("InvoicePaidBy", fields: [lunasById], references: [id])
+
+  usePpn         Boolean @default(false)
+  ppnRateApplied Float   @default(0)
+  useDiskon      Boolean @default(false)
+  diskonPersen   Float?
+  diskonNominal  Float?
+  diskonAmount   Float   @default(0)
+  subtotal       Float
+  ppnAmount      Float   @default(0)
+  grandTotal     Float
+  catatan        String? @db.Text
+
+  createdById String
+  createdBy   User    @relation("InvoiceCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?   @relation("InvoiceUpdater", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items       InvoiceItem[]
+  suratJalans SuratJalan[]
+
+  @@unique([tenantId, noInvoice])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+
+  namaProduk  String
+  satuan      String
+  qty         Float
+  hargaSatuan Float
+  subtotal    Float
+
+  suratJalanItems SuratJalanItem[]
+}
+
+model SuratJalan {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  invoiceId         String
+  invoice           Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  noSuratJalan      String
+  noPo              String?
+  tanggalSuratJalan DateTime @default(now())
+  urutan            Int      @default(1)
+
+  statusPengiriman  String    @default("DIKIRIM")
+  buktiTerimaUrl    String?
+  tanggalDiterima   DateTime?
+  catatanPengiriman String?   @db.Text
+
+  createdById String
+  createdBy   User   @relation("SjCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items SuratJalanItem[]
+
+  @@unique([tenantId, noSuratJalan])
+}
+
+model SuratJalanItem {
+  id            String     @id @default(cuid())
+  suratJalanId  String
+  suratJalan    SuratJalan @relation(fields: [suratJalanId], references: [id], onDelete: Cascade)
+
+  invoiceItemId String
+  invoiceItem   InvoiceItem @relation(fields: [invoiceItemId], references: [id])
+
+  namaProduk String
+  satuan     String
+  qty        Float
+  keterangan String?
+}

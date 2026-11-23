@@ -1,0 +1,74 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { requireSuperAdmin } from "@/lib/current-user";
+import { Badge, EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { ToggleStatusButton } from "./toggle-button";
+
+export default async function CompaniesPage() {
+  await requireSuperAdmin();
+  const tenants = await prisma.tenant.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { users: { where: { role: "OWNER" }, take: 1 } },
+  });
+
+  return (
+    <div>
+      <PageHeader
+        title="Perusahaan"
+        description="Kelola akun Owner dan status tenant."
+        action={<PrimaryLink href="/companies/new">Tambah perusahaan</PrimaryLink>}
+      />
+      {tenants.length === 0 ? (
+        <EmptyState
+          title="Belum ada perusahaan"
+          hint="Buat PT pertama beserta akun Owner-nya."
+          action={<PrimaryLink href="/companies/new">Tambah perusahaan</PrimaryLink>}
+        />
+      ) : (
+        <>
+          <ListSummary>{tenants.length} perusahaan</ListSummary>
+          <TableWrap>
+            <table className={tableClass}>
+              <thead className={theadClass}>
+                <tr>
+                  <th className={thClass}>Perusahaan</th>
+                  <th className={thClass}>Owner</th>
+                  <th className={thClass}>Status</th>
+                  <th className={thClass} />
+                </tr>
+              </thead>
+              <tbody>
+                {tenants.map((tenant) => {
+                  const owner = tenant.users[0];
+                  return (
+                    <tr key={tenant.id} className={trClass}>
+                      <td className={tdClass}>
+                        <p className="font-medium text-slate-900">{tenant.namaPt}</p>
+                        <p className="text-xs text-slate-500">{tenant.telpPt}</p>
+                      </td>
+                      <td className={tdClass}>
+                        <p>{owner?.name ?? "—"}</p>
+                        <p className="text-xs text-slate-500">{owner?.email}</p>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge active={tenant.isActive} />
+                      </td>
+                      <td className={`${tdClass} text-right`}>
+                        <div className="flex justify-end gap-3">
+                          <Link href={`/companies/${tenant.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
+                            Edit
+                          </Link>
+                          <ToggleStatusButton tenantId={tenant.id} isActive={tenant.isActive} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableWrap>
+        </>
+      )}
+    </div>
+  );
+}

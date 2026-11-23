@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-slate-800 antialiased;
+}
+
+::selection {
+  background: #d5e6f2;
+}
+
+.app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-slate-200/90 bg-white shadow-card;
+  }
+}
