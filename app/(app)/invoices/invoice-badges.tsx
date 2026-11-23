@@ -14,6 +14,7 @@ function Pill({ tone, children }: { tone: "green" | "amber" | "slate" | "steel";
 
 export function PaymentBadge({ metode, status }: { metode: string; status: string }) {
   if (status === "LUNAS") return <Pill tone="green">Lunas</Pill>;
+  if (status === "SEBAGIAN") return <Pill tone="amber">{metode === "CREDIT" ? "Tempo · Sebagian" : "Sebagian"}</Pill>;
   return <Pill tone="amber">{metode === "CREDIT" ? "Tempo · Belum lunas" : "Belum lunas"}</Pill>;
 }
 

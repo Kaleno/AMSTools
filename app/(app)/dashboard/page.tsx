@@ -4,9 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { hasPermission, requireUser } from "@/lib/current-user";
 import { getNavItems } from "@/lib/nav";
 import { formatRupiah } from "@/lib/format";
+import { OPEN_PAYMENT_STATUSES, sisaTagihan } from "@/lib/payment";
 import { addWibDays, daysDiffWib, formatWibLong, parseWibDate, wibDateString, wibMonthRange } from "@/lib/datetime";
+import { CallLink } from "@/components/call-link";
 import { PageHeader, PrimaryLink } from "@/components/ui";
 import { PaymentBadge, ShipBadge } from "../invoices/invoice-badges";
+
+function listScrollClass(count: number, tall = false) {
+  if (count <= 5) return undefined;
+  const max = tall ? "max-h-[42rem]" : "max-h-[28rem]";
+  return `app-scroll ${max} overflow-y-auto overscroll-contain`;
+}
 
 function KpiCard({
   label,
@@ -82,10 +90,11 @@ export default async function DashboardPage() {
   }
 
   const tenantId = current.tenant!.id;
+  const dueDays = current.tenant!.dashboardDueDays;
   const { start, end } = wibMonthRange();
   const today = wibDateString();
   const todayStart = parseWibDate(today);
-  const weekEnd = addWibDays(today, 7);
+  const horizonEnd = addWibDays(today, dueDays);
   const now = new Date();
   const todayLabel = new Intl.DateTimeFormat("id-ID", {
     timeZone: "Asia/Jakarta",
@@ -109,10 +118,9 @@ export default async function DashboardPage() {
         tanggalLunas: { gte: start, lt: end },
       },
     }),
-    prisma.invoice.aggregate({
-      _sum: { grandTotal: true },
-      _count: { _all: true },
-      where: { tenantId, statusDokumen: "AKTIF", statusPembayaran: "BELUM_LUNAS" },
+    prisma.invoice.findMany({
+      where: { tenantId, statusDokumen: "AKTIF", statusPembayaran: { in: [...OPEN_PAYMENT_STATUSES] } },
+      select: { grandTotal: true, jumlahTerbayar: true },
     }),
     prisma.suratJalan.count({
       where: { tenantId, statusPengiriman: "DIKIRIM" },
@@ -121,7 +129,7 @@ export default async function DashboardPage() {
       where: {
         tenantId,
         statusDokumen: "AKTIF",
-        statusPembayaran: "BELUM_LUNAS",
+        statusPembayaran: { in: [...OPEN_PAYMENT_STATUSES] },
         tanggalJatuhTempo: { not: null, lt: todayStart },
       },
     }),
@@ -129,28 +137,29 @@ export default async function DashboardPage() {
       where: {
         tenantId,
         statusDokumen: "AKTIF",
-        statusPembayaran: "BELUM_LUNAS",
-        tanggalJatuhTempo: { gte: todayStart, lte: weekEnd },
+        statusPembayaran: { in: [...OPEN_PAYMENT_STATUSES] },
+        tanggalJatuhTempo: { gte: todayStart, lte: horizonEnd },
       },
     }),
     prisma.invoice.findMany({
       where: {
         tenantId,
         statusDokumen: "AKTIF",
-        statusPembayaran: "BELUM_LUNAS",
-        tanggalJatuhTempo: { not: null, lte: weekEnd },
+        statusPembayaran: { in: [...OPEN_PAYMENT_STATUSES] },
+        tanggalJatuhTempo: { not: null, lte: horizonEnd },
       },
       orderBy: { tanggalJatuhTempo: "asc" },
-      take: 5,
       include: { customer: true },
     }),
     prisma.invoice.findMany({
       where: { tenantId, statusDokumen: "AKTIF" },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 50,
       include: { customer: true },
     }),
   ]);
+
+  const piutangSisa = piutang.reduce((sum, row) => sum + sisaTagihan(row), 0);
 
   return (
     <div className="space-y-8">
@@ -166,9 +175,9 @@ export default async function DashboardPage() {
         />
         <TaskCard
           href="/reports/due-dates?filter=minggu"
-          label="Jatuh tempo 7 hari"
+          label={`Jatuh tempo ${dueDays} hari`}
           value={String(dueWeekCount)}
-          hint="Perlu ditagih minggu ini"
+          hint={`Jatuh tempo dalam ${dueDays} hari ke depan`}
           tone={dueWeekCount > 0 ? "amber" : "steel"}
         />
         <TaskCard
@@ -190,45 +199,54 @@ export default async function DashboardPage() {
         />
         <KpiCard
           label="Piutang aktif"
-          value={formatRupiah(piutang._sum.grandTotal ?? 0)}
-          hint={`${piutang._count._all} invoice belum lunas`}
+          value={formatRupiah(piutangSisa)}
+          hint={`${piutang.length} invoice belum lunas`}
           href="/reports/due-dates"
         />
-        <KpiCard label="Invoice terbuka" value={String(piutang._count._all)} hint="Belum lunas" href="/invoices?status=belum" />
+        <KpiCard label="Invoice terbuka" value={String(piutang.length)} hint="Belum lunas dan sebagian" href="/invoices?status=belum" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Jatuh tempo terdekat</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Jatuh tempo terdekat</h2>
+              <p className="text-xs text-slate-500">Lewat jatuh tempo, dan {dueDays} hari ke depan</p>
+            </div>
             <Link href="/reports/due-dates" className="text-sm font-medium text-steel hover:text-steel-dark">
               Semua
             </Link>
           </div>
           {dueSoon.length === 0 ? (
-            <p className="px-5 py-8 text-sm text-slate-500">Tidak ada tagihan jatuh tempo 7 hari atau overdue.</p>
+            <p className="px-5 py-8 text-sm text-slate-500">
+              Tidak ada tagihan yang sudah lewat atau jatuh tempo dalam {dueDays} hari.
+            </p>
           ) : (
-            <ul>
+            <ul className={listScrollClass(dueSoon.length, true)}>
               {dueSoon.map((invoice) => {
                 const days = invoice.tanggalJatuhTempo ? daysDiffWib(now, invoice.tanggalJatuhTempo) : 0;
                 const overdue = days < 0;
+                const sisa = sisaTagihan(invoice);
+                const partial = invoice.jumlahTerbayar > 0;
                 return (
-                  <li key={invoice.id} className="border-t border-slate-100">
-                    <Link href={`/invoices/${invoice.id}`} className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-slate-50">
-                      <div>
+                  <li key={invoice.id} className="border-t border-slate-100 px-5 py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link href={`/invoices/${invoice.id}`} className="min-w-0 hover:text-steel-dark">
                         <p className="text-sm font-semibold text-slate-900">{invoice.noInvoice}</p>
                         <p className="text-sm text-slate-600">{invoice.customer.namaPt}</p>
                         <p className="text-xs text-slate-500">
                           Jatuh tempo {invoice.tanggalJatuhTempo ? formatWibLong(invoice.tanggalJatuhTempo) : "—"}
                         </p>
-                      </div>
+                      </Link>
                       <div className="text-right">
-                        <p className="text-sm font-semibold tabular-nums">{formatRupiah(invoice.grandTotal)}</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatRupiah(partial ? sisa : invoice.grandTotal)}</p>
+                        {partial ? <p className="text-xs text-slate-500">Sisa dari {formatRupiah(invoice.grandTotal)}</p> : null}
                         <p className={`text-xs font-semibold ${overdue ? "text-rose-700" : "text-amber-700"}`}>
                           {overdue ? `Overdue ${Math.abs(days)} hari` : days === 0 ? "Hari ini" : `${days} hari lagi`}
                         </p>
                       </div>
-                    </Link>
+                    </div>
+                    <CallLink phone={invoice.customer.noTelp} pic={invoice.customer.picName} />
                   </li>
                 );
               })}
@@ -246,7 +264,7 @@ export default async function DashboardPage() {
           {recent.length === 0 ? (
             <p className="px-5 py-8 text-sm text-slate-500">Belum ada invoice.</p>
           ) : (
-            <ul>
+            <ul className={listScrollClass(recent.length)}>
               {recent.map((invoice) => (
                 <li key={invoice.id} className="border-t border-slate-100">
                   <Link href={`/invoices/${invoice.id}`} className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-slate-50">

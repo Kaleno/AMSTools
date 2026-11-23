@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { hasPermission, requirePermission } from "@/lib/current-user";
 import { formatRupiah } from "@/lib/format";
-import { formatWibLong } from "@/lib/datetime";
+import { formatWibLong, wibDateString } from "@/lib/datetime";
 import { invoiceLocks } from "@/lib/invoice-lock";
+import { sisaTagihan } from "@/lib/payment";
 import { hasRemaining, remainingByItem } from "@/lib/shipping";
 import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, TableWrap, moneyClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { DocBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
-import { MarkPaidButton, VoidButton } from "../invoice-actions";
+import { RecordPaymentButton, VoidButton } from "../invoice-actions";
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
   const current = await requirePermission("canManageInvoice");
@@ -19,6 +20,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       items: true,
       createdBy: true,
       lunasBy: true,
+      pembayarans: { include: { createdBy: true }, orderBy: { tanggal: "asc" } },
       suratJalans: { include: { items: true } },
     },
   });
@@ -26,8 +28,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
   const locks = invoiceLocks(invoice);
   const remainRows = remainingByItem(invoice);
+  const sisa = sisaTagihan(invoice);
   const canCreateSj =
     hasPermission(current, "canManageSuratJalan") && invoice.statusDokumen !== "VOID" && hasRemaining(invoice);
+  const payEmphasis = canCreateSj ? "secondary" : "primary";
 
   const meta = [
     { label: "Tanggal", value: formatWibLong(invoice.tanggalInvoice) },
@@ -58,7 +62,9 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           action={
             <>
               {canCreateSj ? <PrimaryLink href={`/invoices/${invoice.id}/surat-jalan/new`}>Buat Surat Jalan</PrimaryLink> : null}
-              {locks.canMarkPaid ? <MarkPaidButton id={invoice.id} /> : null}
+              {locks.canRecordPayment ? (
+                <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis={payEmphasis} />
+              ) : null}
               <SecondaryLink href={`/print/invoice/${invoice.id}`}>Cetak</SecondaryLink>
               <SecondaryLink href={`/invoices/${invoice.id}/edit`}>Ubah</SecondaryLink>
               {locks.canVoid ? <VoidButton id={invoice.id} /> : null}
@@ -115,9 +121,23 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             </div>
           ) : null}
         </div>
-        <div className="flex items-end justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total tagihan</span>
-          <span className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{formatRupiah(invoice.grandTotal)}</span>
+        <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total tagihan</span>
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{formatRupiah(invoice.grandTotal)}</span>
+          </div>
+          {invoice.jumlahTerbayar > 0 ? (
+            <div className="mt-2 flex items-end justify-between text-sm text-slate-600">
+              <span>Terbayar</span>
+              <span className="tabular-nums">{formatRupiah(invoice.jumlahTerbayar)}</span>
+            </div>
+          ) : null}
+          {invoice.metodePembayaran === "CREDIT" && invoice.statusPembayaran !== "LUNAS" ? (
+            <div className="mt-1 flex items-end justify-between text-sm font-semibold text-slate-900">
+              <span>Sisa</span>
+              <span className="tabular-nums">{formatRupiah(sisa)}</span>
+            </div>
+          ) : null}
         </div>
       </TableWrap>
 
@@ -126,6 +146,29 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           <span className="font-medium text-slate-800">Catatan. </span>
           {invoice.catatan}
         </p>
+      ) : null}
+
+      {invoice.metodePembayaran === "CREDIT" ? (
+        <section className="panel p-5">
+          <h2 className="mb-4 text-sm font-semibold text-slate-900">Pembayaran</h2>
+          {invoice.pembayarans.length === 0 ? (
+            <p className="text-sm text-slate-500">Belum ada pembayaran. DP dan pelunasan dicatat di sini.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {invoice.pembayarans.map((payment) => (
+                <li key={payment.id} className="flex items-start justify-between gap-3 py-3 text-sm">
+                  <div>
+                    <p className="font-medium text-slate-800">{formatWibLong(payment.tanggal)}</p>
+                    <p className="text-xs text-slate-500">
+                      {payment.catatan || "Pembayaran"} · {payment.createdBy.name}
+                    </p>
+                  </div>
+                  <p className="font-semibold tabular-nums text-slate-900">{formatRupiah(payment.jumlah)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       ) : null}
 
       <section className="panel p-5">

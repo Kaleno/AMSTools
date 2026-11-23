@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { CallLink } from "@/components/call-link";
 import { DeleteCustomerButton } from "./delete-button";
 
 export default async function CustomersPage() {
@@ -28,6 +29,23 @@ export default async function CustomersPage() {
       ) : (
         <>
           <ListSummary>{customers.length} customer</ListSummary>
+          <div className="space-y-2 md:hidden">
+            {customers.map((customer) => (
+              <div key={customer.id} className="panel p-4">
+                <p className="font-semibold text-slate-900">{customer.namaPt}</p>
+                {customer.email ? <p className="text-xs text-slate-500">{customer.email}</p> : null}
+                <CallLink phone={customer.noTelp} pic={customer.picName} />
+                <p className="mt-2 line-clamp-3 text-sm text-slate-600">{customer.alamatPengiriman}</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <Link href={`/customers/${customer.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
+                    Edit
+                  </Link>
+                  <DeleteCustomerButton id={customer.id} disabled={customer._count.invoices > 0} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <TableWrap>
             <table className={tableClass}>
               <thead className={theadClass}>
@@ -65,6 +83,7 @@ export default async function CustomersPage() {
               </tbody>
             </table>
           </TableWrap>
+          </div>
         </>
       )}
     </div>

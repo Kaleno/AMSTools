@@ -29,6 +29,7 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   const sjFooterNote = str(formData, "sjFooterNote");
   const ppnRaw = str(formData, "ppnPercentage");
   const ppnPercentage = Number(ppnRaw || "11");
+  const dueDays = Number(str(formData, "dashboardDueDays") || "7");
   const newPassword = str(formData, "newPassword");
 
   if (!namaPt || !alamatPt || !telpPt) {
@@ -36,6 +37,9 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   }
   if (Number.isNaN(ppnPercentage) || ppnPercentage < 0) {
     return { error: "Persentase PPN tidak valid." };
+  }
+  if (!Number.isInteger(dueDays) || dueDays < 1 || dueDays > 90) {
+    return { error: "Rentang jatuh tempo terdekat harus bilangan 1 sampai 90 hari." };
   }
 
   const logo = formData.get("logo");
@@ -73,10 +77,13 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
       invoiceFooterNote: invoiceFooterNote || null,
       sjFooterNote: sjFooterNote || null,
       ppnPercentage,
+      dashboardDueDays: dueDays,
       ...(logoUrl ? { logoUrl } : {}),
     },
   });
 
   revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports/due-dates");
   return { error: null, ok: true };
 }

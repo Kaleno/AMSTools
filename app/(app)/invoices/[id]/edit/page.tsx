@@ -29,7 +29,9 @@ export default async function EditInvoicePage({ params }: { params: { id: string
         description={
           locks.catatanOnly
             ? "Invoice sudah lunas / barang sudah diterima. Hanya catatan yang bisa diubah."
-            : invoice.noInvoice
+            : invoice.jumlahTerbayar > 0
+              ? "Sudah ada pembayaran. Metode tetap Tempo, dan total tidak boleh di bawah yang sudah masuk."
+              : invoice.noInvoice
         }
       />
       <InvoiceForm

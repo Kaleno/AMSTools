@@ -49,6 +49,26 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
       </section>
 
       <section className="space-y-4 panel p-6">
+        <h2 className="font-semibold text-slate-900">Dashboard</h2>
+        <Field label="Jatuh tempo terdekat (hari)">
+          <input
+            name="dashboardDueDays"
+            type="number"
+            min={1}
+            max={90}
+            step={1}
+            required
+            defaultValue={tenant.dashboardDueDays}
+            className={inputClass}
+          />
+        </Field>
+        <p className="text-sm text-slate-500">
+          Daftar di dashboard menampilkan tagihan yang sudah lewat, plus yang jatuh tempo dalam jumlah hari ini ke depan.
+          Kartu “Jatuh tempo” dan filter laporan memakai angka yang sama.
+        </p>
+      </section>
+
+      <section className="space-y-4 panel p-6">
         <h2 className="font-semibold text-slate-900">Pajak & nomor dokumen</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="PPN default (%)">

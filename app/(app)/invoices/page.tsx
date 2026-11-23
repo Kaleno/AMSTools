@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatRupiah } from "@/lib/format";
+import { sisaTagihan } from "@/lib/payment";
 import { formatWibLong } from "@/lib/datetime";
 import { FilterTabs } from "@/components/filter-tabs";
 import { SearchField } from "@/components/search-field";
@@ -24,7 +25,7 @@ export default async function InvoicesPage({
       tenantId: current.tenant.id,
       ...(status === "aktif" ? { statusDokumen: "AKTIF" } : {}),
       ...(status === "void" ? { statusDokumen: "VOID" } : {}),
-      ...(status === "belum" ? { statusDokumen: "AKTIF", statusPembayaran: "BELUM_LUNAS" } : {}),
+      ...(status === "belum" ? { statusDokumen: "AKTIF", statusPembayaran: { in: ["BELUM_LUNAS", "SEBAGIAN"] } } : {}),
       ...(status === "lunas" ? { statusDokumen: "AKTIF", statusPembayaran: "LUNAS" } : {}),
       ...(q
         ? {
@@ -46,7 +47,7 @@ export default async function InvoicesPage({
     <div>
       <PageHeader
         title="Invoice"
-        description="Cash langsung lunas. Tempo menunggu Tandai Lunas."
+        description="Cash langsung lunas. Tempo bisa dicatat bertahap sampai lunas."
         action={<PrimaryLink href="/invoices/new">Buat Invoice</PrimaryLink>}
       />
 
@@ -93,7 +94,12 @@ export default async function InvoicesPage({
                     <p className="text-sm text-slate-600">{invoice.customer.namaPt}</p>
                     <p className="mt-1 text-xs text-slate-500">{formatWibLong(invoice.tanggalInvoice)}</p>
                   </div>
-                  <p className="text-sm font-semibold tabular-nums text-slate-900">{formatRupiah(invoice.grandTotal)}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{formatRupiah(invoice.grandTotal)}</p>
+                    {invoice.statusPembayaran === "SEBAGIAN" ? (
+                      <p className="text-xs text-slate-500">Sisa {formatRupiah(sisaTagihan(invoice))}</p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1">
                   <DocBadge status={invoice.statusDokumen} />
@@ -125,7 +131,12 @@ export default async function InvoicesPage({
                       </td>
                       <td className={tdClass}>{invoice.customer.namaPt}</td>
                       <td className={tdClass}>{formatWibLong(invoice.tanggalInvoice)}</td>
-                      <td className={moneyClass}>{formatRupiah(invoice.grandTotal)}</td>
+                      <td className={moneyClass}>
+                        <p>{formatRupiah(invoice.grandTotal)}</p>
+                        {invoice.statusPembayaran === "SEBAGIAN" ? (
+                          <p className="text-xs font-normal text-slate-500">Sisa {formatRupiah(sisaTagihan(invoice))}</p>
+                        ) : null}
+                      </td>
                       <td className={tdClass}>
                         <div className="flex flex-wrap gap-1">
                           <DocBadge status={invoice.statusDokumen} />

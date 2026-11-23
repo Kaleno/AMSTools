@@ -29,6 +29,26 @@ export default async function ProductsPage() {
       ) : (
         <>
           <ListSummary>{products.length} produk</ListSummary>
+          <div className="space-y-2 md:hidden">
+            {products.map((product) => (
+              <div key={product.id} className="panel p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{product.namaProduk}</p>
+                    <p className="text-xs text-slate-500">{product.kodeProduk || product.satuan}</p>
+                  </div>
+                  <p className="text-sm font-semibold tabular-nums text-slate-900">{formatRupiah(product.hargaDefault)}</p>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <Link href={`/products/${product.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
+                    Edit
+                  </Link>
+                  <DeleteProductButton id={product.id} disabled={product._count.invoiceItems > 0} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <TableWrap>
             <table className={tableClass}>
               <thead className={theadClass}>
@@ -61,6 +81,7 @@ export default async function ProductsPage() {
               </tbody>
             </table>
           </TableWrap>
+          </div>
         </>
       )}
     </div>

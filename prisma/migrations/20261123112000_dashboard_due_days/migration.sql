@@ -1,0 +1,1 @@
+ALTER TABLE `Tenant` ADD COLUMN `dashboardDueDays` INTEGER NOT NULL DEFAULT 7;

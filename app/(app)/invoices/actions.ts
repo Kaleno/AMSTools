@@ -9,6 +9,7 @@ import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
 import { calcInvoice } from "@/lib/invoice-calc";
 import { invoiceLocks, shippedQtyByItem } from "@/lib/invoice-lock";
+import { derivePaymentStatus } from "@/lib/payment";
 
 export type ActionState = { error: string | null };
 
@@ -149,6 +150,7 @@ export async function createInvoice(_prev: ActionState, formData: FormData): Pro
         subtotal: totals.subtotal,
         ppnAmount: totals.ppnAmount,
         grandTotal: totals.grandTotal,
+        jumlahTerbayar: payment.metodePembayaran === "CASH" ? totals.grandTotal : 0,
         catatan: str(formData, "catatan") || null,
         createdById: current.user.id,
         items: {
@@ -222,14 +224,33 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
 
     const { resolved, useDiskon, usePpn, diskonPersen, diskonNominal, ppnRate, totals } =
       await buildTotals(current.tenant.id, lines, formData);
-    const payment = locks.paymentLocked
+    const base = locks.paymentLocked
       ? {
           metodePembayaran: invoice.metodePembayaran,
-          statusPembayaran: invoice.statusPembayaran,
           tanggalJatuhTempo: invoice.tanggalJatuhTempo,
           tanggalLunas: invoice.tanggalLunas,
+          lunasById: invoice.lunasById,
         }
-      : paymentFields(formData);
+      : {
+          ...paymentFields(formData),
+          lunasById: null as string | null,
+        };
+
+    if (base.metodePembayaran === "CREDIT" && Math.round(totals.grandTotal) < Math.round(invoice.jumlahTerbayar)) {
+      throw new Error("Total tagihan tidak boleh lebih kecil dari yang sudah dibayar.");
+    }
+
+    let tanggalJatuhTempo = base.tanggalJatuhTempo;
+    if (base.metodePembayaran === "CREDIT") {
+      const due = str(formData, "tanggalJatuhTempo");
+      if (!due) throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
+      tanggalJatuhTempo = parseWibDate(due);
+    }
+
+    const jumlahTerbayar = base.metodePembayaran === "CASH" ? totals.grandTotal : Math.round(invoice.jumlahTerbayar);
+    const statusPembayaran = base.metodePembayaran === "CASH" ? "LUNAS" : derivePaymentStatus(totals.grandTotal, jumlahTerbayar);
+    const tanggalLunas = statusPembayaran === "LUNAS" ? base.tanggalLunas ?? new Date() : null;
+    const lunasById = statusPembayaran === "LUNAS" ? base.lunasById ?? current.user.id : null;
 
     await prisma.$transaction(async (tx) => {
       await tx.invoice.update({
@@ -239,7 +260,12 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
           noPo: str(formData, "noPo") || null,
           tanggalInvoice: parseWibDate(tanggal),
           customerId,
-          ...payment,
+          metodePembayaran: base.metodePembayaran,
+          statusPembayaran,
+          tanggalJatuhTempo,
+          tanggalLunas,
+          lunasById,
+          jumlahTerbayar,
           usePpn,
           ppnRateApplied: ppnRate,
           useDiskon,
@@ -322,25 +348,52 @@ export async function voidInvoice(invoiceId: string) {
   revalidatePath(`/invoices/${invoice.id}`);
 }
 
-export async function markInvoicePaid(invoiceId: string) {
+export async function recordPayment(invoiceId: string, formData: FormData): Promise<ActionState> {
   const current = await requirePermission("canManageInvoice");
   const invoice = await loadInvoice(current.tenant.id, invoiceId);
-  if (!invoice) return;
+  if (!invoice) return { error: "Invoice tidak ditemukan." };
   const locks = invoiceLocks(invoice);
-  if (!locks.canMarkPaid) return;
+  if (!locks.canRecordPayment) return { error: "Pembayaran tidak bisa dicatat untuk invoice ini." };
 
-  await prisma.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      statusPembayaran: "LUNAS",
-      tanggalLunas: new Date(),
-      lunasById: current.user.id,
-      updatedById: current.user.id,
-    },
-  });
+  const amount = Math.round(Number(str(formData, "jumlah").replace(/\D/g, "") || "0"));
+  const tanggal = str(formData, "tanggal");
+  const catatan = str(formData, "catatan") || null;
+  const sisa = Math.round(invoice.grandTotal) - Math.round(invoice.jumlahTerbayar);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return { error: "Tanggal pembayaran tidak valid." };
+  if (amount < 1) return { error: "Jumlah pembayaran wajib diisi." };
+  if (amount > sisa) return { error: "Jumlah melebihi sisa tagihan." };
+
+  const paid = Math.round(invoice.jumlahTerbayar) + amount;
+  const status = derivePaymentStatus(invoice.grandTotal, paid);
+  const payDate = parseWibDate(tanggal);
+
+  await prisma.$transaction([
+    prisma.pembayaran.create({
+      data: {
+        invoiceId: invoice.id,
+        jumlah: amount,
+        tanggal: payDate,
+        catatan,
+        createdById: current.user.id,
+      },
+    }),
+    prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        jumlahTerbayar: paid,
+        statusPembayaran: status,
+        tanggalLunas: status === "LUNAS" ? payDate : null,
+        lunasById: status === "LUNAS" ? current.user.id : null,
+        updatedById: current.user.id,
+      },
+    }),
+  ]);
+
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${invoice.id}`);
   revalidatePath("/dashboard");
   revalidatePath("/reports/due-dates");
   revalidatePath("/reports/history");
+  return { error: null };
 }

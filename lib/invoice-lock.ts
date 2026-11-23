@@ -1,4 +1,5 @@
 import type { Invoice, SuratJalan, SuratJalanItem } from "@prisma/client";
+import { sisaTagihan } from "@/lib/payment";
 
 type InvoiceWithSj = Invoice & {
   suratJalans: (SuratJalan & { items?: SuratJalanItem[] })[];
@@ -9,6 +10,7 @@ export function invoiceLocks(invoice: InvoiceWithSj) {
   const hasSj = invoice.suratJalans.length > 0;
   const hasDiterima = invoice.suratJalans.some((sj) => sj.statusPengiriman === "DITERIMA");
   const creditLunas = invoice.metodePembayaran === "CREDIT" && invoice.statusPembayaran === "LUNAS";
+  const creditPaid = invoice.metodePembayaran === "CREDIT" && Math.round(invoice.jumlahTerbayar) > 0;
 
   return {
     isVoid,
@@ -17,12 +19,13 @@ export function invoiceLocks(invoice: InvoiceWithSj) {
     creditLunas,
     numberLocked: hasSj || isVoid,
     itemsLocked: isVoid || hasDiterima || creditLunas,
-    paymentLocked: isVoid || hasDiterima || creditLunas,
-    canVoid: !isVoid && !hasDiterima && !creditLunas,
-    canMarkPaid:
+    paymentLocked: isVoid || hasDiterima || creditLunas || creditPaid,
+    canVoid: !isVoid && !hasDiterima && !creditLunas && !creditPaid,
+    canRecordPayment:
       !isVoid &&
       invoice.metodePembayaran === "CREDIT" &&
-      invoice.statusPembayaran === "BELUM_LUNAS",
+      invoice.statusPembayaran !== "LUNAS" &&
+      sisaTagihan(invoice) > 0,
     catatanOnly: hasDiterima || creditLunas,
   };
 }

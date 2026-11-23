@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatWibLong, parseWibDate, toDateInputValue, wibDateString, wibMonthRange } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
-import { EmptyState, PageHeader, TableWrap, inputClass, moneyClass, primaryButtonClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { historyInvoiceWhere } from "@/lib/report-filters";
+import { EmptyState, PageHeader, TableWrap, inputClass, moneyClass, primaryButtonClass, secondaryButtonClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { PaymentBadge } from "../../invoices/invoice-badges";
 
 export default async function PurchaseHistoryPage({
@@ -26,12 +27,7 @@ export default async function PurchaseHistoryPage({
   });
 
   const invoices = await prisma.invoice.findMany({
-    where: {
-      tenantId: current.tenant.id,
-      statusDokumen: "AKTIF",
-      tanggalInvoice: { gte: rangeStart, lt: rangeEnd },
-      ...(customerId ? { customerId } : {}),
-    },
+    where: historyInvoiceWhere(current.tenant.id, rangeStart, rangeEnd, customerId),
     orderBy: { tanggalInvoice: "desc" },
     include: { customer: true, items: true },
   });
@@ -58,7 +54,7 @@ export default async function PurchaseHistoryPage({
     <div>
       <PageHeader title="Riwayat pembelian" description="Ringkasan per customer dan harga historis invoice." />
 
-      <form className="panel mb-5 flex flex-wrap items-end gap-3 p-4">
+      <form method="get" className="panel mb-5 flex flex-wrap items-end gap-3 p-4">
         <label className="block min-w-[16rem] flex-1">
           <span className="mb-1.5 block text-sm font-medium text-slate-700">Customer</span>
           <select name="customerId" defaultValue={customerId} className={inputClass}>
@@ -80,6 +76,9 @@ export default async function PurchaseHistoryPage({
         </label>
         <button type="submit" className={primaryButtonClass}>
           Tampilkan
+        </button>
+        <button type="submit" formAction="/reports/history/export" className={secondaryButtonClass}>
+          Export Excel
         </button>
       </form>
 

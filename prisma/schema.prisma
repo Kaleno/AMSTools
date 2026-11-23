@@ -19,6 +19,7 @@ model Tenant {
   isActive Boolean @default(true)
 
   ppnPercentage    Float  @default(11.0)
+  dashboardDueDays Int    @default(7)
   invoicePrefix    String @default("AMS/CKR/")
   bankInfo         String? @db.Text
   invoiceSignatory String  @default("Dody Heryanto")
@@ -59,6 +60,7 @@ model User {
   updatedInvoices    Invoice[]    @relation("InvoiceUpdater")
   createdSuratJalans SuratJalan[] @relation("SjCreator")
   paidInvoices       Invoice[]    @relation("InvoicePaidBy")
+  pembayarans        Pembayaran[] @relation("PaymentCreator")
 }
 
 model Customer {
@@ -127,6 +129,7 @@ model Invoice {
   subtotal       Float
   ppnAmount      Float   @default(0)
   grandTotal     Float
+  jumlahTerbayar Float   @default(0)
   catatan        String? @db.Text
 
   createdById String
@@ -139,6 +142,7 @@ model Invoice {
 
   items       InvoiceItem[]
   suratJalans SuratJalan[]
+  pembayarans Pembayaran[]
 
   @@unique([tenantId, noInvoice])
 }
@@ -187,6 +191,23 @@ model SuratJalan {
   items SuratJalanItem[]
 
   @@unique([tenantId, noSuratJalan])
+}
+
+model Pembayaran {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  jumlah      Float
+  tanggal     DateTime
+  catatan     String?  @db.Text
+
+  createdById String
+  createdBy   User     @relation("PaymentCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
 }
 
 model SuratJalanItem {

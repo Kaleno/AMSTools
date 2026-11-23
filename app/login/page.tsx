@@ -20,7 +20,7 @@ export default function LoginPage() {
             Invoice, surat jalan, dan piutang dalam satu meja kerja.
           </h1>
           <p className="mt-4 max-w-md text-base leading-relaxed text-white/75">
-            Catat tagihan, kirim barang, lalu tandai lunas. Khusus pengguna yang sudah didaftarkan.
+            Catat tagihan, kirim barang, lalu catat pembayaran. Khusus pengguna yang sudah didaftarkan.
           </p>
         </div>
         <p className="pt-10 text-xs text-white/60">CV. Abadi Makmur Sejahtera</p>

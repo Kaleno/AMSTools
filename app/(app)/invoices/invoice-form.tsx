@@ -72,6 +72,7 @@ export function InvoiceForm({
   const [tanggal, setTanggal] = useState(defaults?.tanggalInvoice ?? "");
   const [noInvoice, setNoInvoice] = useState(defaults?.noInvoice ?? suggestedNumber);
   const [numberTouched, setNumberTouched] = useState(!autoNumber);
+  const [customerId, setCustomerId] = useState(defaults?.customerId ?? "");
   const [metode, setMetode] = useState<"CASH" | "CREDIT">(defaults?.metodePembayaran ?? "CASH");
   const [usePpn, setUsePpn] = useState(defaults?.usePpn ?? false);
   const [useDiskon, setUseDiskon] = useState(defaults?.useDiskon ?? false);
@@ -157,16 +158,9 @@ export function InvoiceForm({
               readOnly={numberLocked || readOnly}
             />
           </Field>
-          {readOnly ? <input type="hidden" name="customerId" value={defaults?.customerId ?? ""} /> : null}
           <Field label="Customer">
-            <select name="customerId" required defaultValue={defaults?.customerId ?? ""} className={inputClass} disabled={readOnly}>
-              <option value="">Pilih customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.namaPt}
-                </option>
-              ))}
-            </select>
+            <input type="hidden" name="customerId" value={customerId} />
+            <CustomerPicker customers={customers} value={customerId} disabled={readOnly} onChange={setCustomerId} />
           </Field>
           <Field label="No. PO (opsional)">
             <input name="noPo" defaultValue={defaults?.noPo ?? ""} className={inputClass} readOnly={readOnly} />
@@ -194,7 +188,7 @@ export function InvoiceForm({
                 required
                 defaultValue={defaults?.tanggalJatuhTempo}
                 className={inputClass}
-                readOnly={paymentLocked || readOnly}
+                readOnly={readOnly}
               />
             </Field>
           ) : null}
@@ -440,6 +434,106 @@ function ProductPicker({
                 >
                   <span className="font-medium text-slate-800">{product.namaProduk}</span>
                   <span className="shrink-0 text-xs text-slate-400">{product.kodeProduk || product.satuan}</span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function CustomerPicker({
+  customers,
+  value,
+  disabled,
+  onChange,
+}: {
+  customers: Customer[];
+  value: string;
+  disabled?: boolean;
+  onChange: (customerId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const selected = customers.find((customer) => customer.id === value);
+  const needle = query.trim().toLowerCase();
+  const filtered = customers
+    .filter((customer) => {
+      if (!needle) return true;
+      return (
+        customer.namaPt.toLowerCase().includes(needle) ||
+        (customer.picName ?? "").toLowerCase().includes(needle) ||
+        customer.noTelp.toLowerCase().includes(needle)
+      );
+    })
+    .slice(0, 30);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const input = anchorRef.current?.querySelector("input");
+      if (!input) return;
+      const box = input.getBoundingClientRect();
+      setRect({ top: box.bottom + 4, left: box.left, width: box.width });
+    }
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, query]);
+
+  return (
+    <div
+      ref={anchorRef}
+      className="relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <input
+        value={open ? query : selected?.namaPt ?? ""}
+        placeholder="Cari nama, PIC, atau telepon"
+        disabled={disabled}
+        onFocus={() => {
+          if (disabled) return;
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          if (value) onChange("");
+          setOpen(true);
+        }}
+        className={inputClass}
+      />
+      {open && !disabled && rect ? (
+        <ul
+          className="fixed z-[80] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          style={{ top: rect.top, left: rect.left, width: rect.width }}
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-slate-500">Tidak ada customer.</li>
+          ) : (
+            filtered.map((customer) => (
+              <li key={customer.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(customer.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="font-medium text-slate-800">{customer.namaPt}</span>
+                  <span className="shrink-0 text-xs text-slate-400">{customer.picName || customer.noTelp}</span>
                 </button>
               </li>
             ))

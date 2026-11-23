@@ -101,6 +101,16 @@ export default async function PrintInvoicePage({ params }: { params: { id: strin
             <p className="font-bold">
               TOTAL <span className="inline-block w-28">{formatRupiah(invoice.grandTotal)}</span>
             </p>
+            {invoice.jumlahTerbayar > 0 && invoice.statusPembayaran !== "LUNAS" ? (
+              <>
+                <p>
+                  Terbayar <span className="inline-block w-28">{formatRupiah(invoice.jumlahTerbayar)}</span>
+                </p>
+                <p className="font-bold">
+                  SISA <span className="inline-block w-28">{formatRupiah(Math.max(0, Math.round(invoice.grandTotal) - Math.round(invoice.jumlahTerbayar)))}</span>
+                </p>
+              </>
+            ) : null}
             <div className="mt-4 border border-black p-3 text-center">
               <p>
                 {tenant.kotaSurat}, {formatWibLong(invoice.tanggalInvoice)}
