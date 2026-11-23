@@ -9,16 +9,17 @@ import { FilterTabs } from "@/components/filter-tabs";
 import { SearchField } from "@/components/search-field";
 import { ClickableRow } from "@/components/clickable-row";
 import { EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, moneyClass, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
-import { DocBadge, PaymentBadge } from "./invoice-badges";
+import { DocBadge, PaymentBadge, ShipBadge } from "./invoice-badges";
 
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string };
+  searchParams: { q?: string; status?: string; kirim?: string };
 }) {
   const current = await requirePermission("canManageInvoice");
   const q = searchParams.q?.trim() ?? "";
   const status = searchParams.status ?? "aktif";
+  const kirim = searchParams.kirim ?? "semua";
 
   const invoices = await prisma.invoice.findMany({
     where: {
@@ -27,6 +28,9 @@ export default async function InvoicesPage({
       ...(status === "void" ? { statusDokumen: "VOID" } : {}),
       ...(status === "belum" ? { statusDokumen: "AKTIF", statusPembayaran: { in: ["BELUM_LUNAS", "SEBAGIAN"] } } : {}),
       ...(status === "lunas" ? { statusDokumen: "AKTIF", statusPembayaran: "LUNAS" } : {}),
+      ...(kirim === "belum" ? { statusPengiriman: "BELUM_DIKIRIM" } : {}),
+      ...(kirim === "sebagian" ? { statusPengiriman: "SEBAGIAN" } : {}),
+      ...(kirim === "terkirim" ? { statusPengiriman: "TERKIRIM" } : {}),
       ...(q
         ? {
             OR: [
@@ -51,27 +55,41 @@ export default async function InvoicesPage({
         action={<PrimaryLink href="/invoices/new">Buat Invoice</PrimaryLink>}
       />
 
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <FilterTabs
+            pathname="/invoices"
+            param="status"
+            value={status}
+            keep={{ q, kirim }}
+            options={[
+              { value: "aktif", label: "Aktif" },
+              { value: "belum", label: "Belum lunas" },
+              { value: "lunas", label: "Lunas" },
+              { value: "void", label: "Batal" },
+              { value: "semua", label: "Semua" },
+            ]}
+          />
+          <Suspense fallback={<div className="h-9 w-full rounded-lg bg-slate-100 sm:w-72" />}>
+            <SearchField placeholder="Cari nomor, customer, atau PO" />
+          </Suspense>
+        </div>
         <FilterTabs
           pathname="/invoices"
-          param="status"
-          value={status}
-          keep={{ q }}
+          param="kirim"
+          value={kirim}
+          keep={{ q, status }}
           options={[
-            { value: "aktif", label: "Aktif" },
-            { value: "belum", label: "Belum lunas" },
-            { value: "lunas", label: "Lunas" },
-            { value: "void", label: "Batal" },
-            { value: "semua", label: "Semua" },
+            { value: "semua", label: "Semua kirim" },
+            { value: "belum", label: "Belum dikirim" },
+            { value: "sebagian", label: "Sebagian" },
+            { value: "terkirim", label: "Terkirim" },
           ]}
         />
-        <Suspense fallback={<div className="h-9 w-full rounded-lg bg-slate-100 sm:w-72" />}>
-          <SearchField placeholder="Cari nomor, customer, atau PO" />
-        </Suspense>
       </div>
 
       {invoices.length === 0 ? (
-        q || status !== "aktif" ? (
+        q || status !== "aktif" || kirim !== "semua" ? (
           <EmptyState title="Tidak ada invoice pada filter ini" hint="Ubah pencarian atau pilih status lain." />
         ) : (
           <EmptyState
@@ -104,6 +122,7 @@ export default async function InvoicesPage({
                 <div className="mt-3 flex flex-wrap gap-1">
                   <DocBadge status={invoice.statusDokumen} />
                   <PaymentBadge metode={invoice.metodePembayaran} status={invoice.statusPembayaran} />
+                  {invoice.statusDokumen !== "VOID" ? <ShipBadge status={invoice.statusPengiriman} /> : null}
                 </div>
               </Link>
             ))}
@@ -141,6 +160,7 @@ export default async function InvoicesPage({
                         <div className="flex flex-wrap gap-1">
                           <DocBadge status={invoice.statusDokumen} />
                           <PaymentBadge metode={invoice.metodePembayaran} status={invoice.statusPembayaran} />
+                          {invoice.statusDokumen !== "VOID" ? <ShipBadge status={invoice.statusPengiriman} /> : null}
                         </div>
                       </td>
                     </ClickableRow>

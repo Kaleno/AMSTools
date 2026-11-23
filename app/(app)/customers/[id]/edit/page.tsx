@@ -14,7 +14,7 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
 
   return (
     <div>
-      <PageHeader title="Edit customer" />
+      <PageHeader showOnMobile title="Edit customer" />
       <CustomerForm action={updateCustomer.bind(null, customer.id)} customer={customer} submitLabel="Simpan" />
     </div>
   );

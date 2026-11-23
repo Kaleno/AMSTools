@@ -23,6 +23,7 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   const npwpPt = str(formData, "npwpPt");
   const kotaSurat = str(formData, "kotaSurat") || "Cikarang";
   const invoicePrefix = str(formData, "invoicePrefix") || "AMS/CKR/";
+  const productPrefix = str(formData, "productPrefix") || "PRD-";
   const bankInfo = str(formData, "bankInfo");
   const invoiceSignatory = str(formData, "invoiceSignatory") || "Dody Heryanto";
   const invoiceFooterNote = str(formData, "invoiceFooterNote");
@@ -72,6 +73,7 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
       npwpPt: npwpPt || null,
       kotaSurat,
       invoicePrefix,
+      productPrefix,
       bankInfo: bankInfo || null,
       invoiceSignatory,
       invoiceFooterNote: invoiceFooterNote || null,

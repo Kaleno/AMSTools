@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatWibLong } from "@/lib/datetime";
-import { BackLink, MetaGrid, PageHeader, SecondaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { BackLink, MetaGrid, PageHeader, SecondaryLink, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { ProofForm } from "./proof-form";
 
 export default async function SuratJalanDetailPage({ params }: { params: { id: string } }) {
@@ -34,6 +34,7 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
       <div>
         <BackLink href="/surat-jalan">Surat Jalan</BackLink>
         <PageHeader
+          showOnMobile
           title={sj.noSuratJalan}
           description={`${sj.invoice.customer.namaPt} · Invoice ${sj.invoice.noInvoice}`}
           action={
@@ -56,7 +57,40 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
 
       <MetaGrid items={meta} />
 
-      <TableWrap>
+      <div className="flex flex-col gap-5">
+      <section className="panel order-1 p-4 lg:order-2 lg:p-5">
+        <h2 className="text-sm font-semibold text-slate-900">{received ? "Foto bukti" : "Bukti terima"}</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {received ? "Foto tanda terima yang sudah diunggah." : "Ambil foto surat jalan yang sudah ditandatangani penerima."}
+        </p>
+        {sj.buktiTerimaUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/media/${sj.buktiTerimaUrl}?v=${sj.updatedAt.getTime()}`}
+            alt="Bukti terima"
+            className="mt-4 max-h-96 w-full rounded-lg border border-slate-200 object-contain"
+          />
+        ) : null}
+        <div className="mt-4">
+          <ProofForm suratJalanId={sj.id} replace={Boolean(sj.buktiTerimaUrl)} />
+        </div>
+      </section>
+
+      <div className="panel order-2 overflow-hidden lg:order-1">
+        <div className="divide-y divide-slate-100 md:hidden">
+          {sj.items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{item.namaProduk}</p>
+                <p className="text-xs text-slate-500">{item.keterangan || item.satuan}</p>
+              </div>
+              <p className="text-sm font-semibold tabular-nums">
+                {item.qty} {item.satuan}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block">
         <table className={tableClass}>
           <thead className={theadClass}>
             <tr>
@@ -77,25 +111,9 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
             ))}
           </tbody>
         </table>
-      </TableWrap>
-
-      <section className="panel p-5">
-        <h2 className="text-sm font-semibold text-slate-900">{received ? "Foto bukti" : "Bukti terima"}</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {received ? "Foto tanda terima yang sudah diunggah." : "Ambil foto surat jalan yang sudah ditandatangani penerima."}
-        </p>
-        {sj.buktiTerimaUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/media/${sj.buktiTerimaUrl}?v=${sj.updatedAt.getTime()}`}
-            alt="Bukti terima"
-            className="mt-4 max-h-96 w-full rounded-lg border border-slate-200 object-contain"
-          />
-        ) : null}
-        <div className="mt-4">
-          <ProofForm suratJalanId={sj.id} replace={Boolean(sj.buktiTerimaUrl)} />
         </div>
-      </section>
+      </div>
+      </div>
 
       <Link href={`/invoices/${sj.invoiceId}`} className="inline-block text-sm font-medium text-steel hover:text-steel-dark">
         Buka invoice terkait

@@ -5,15 +5,14 @@ import { hasPermission, requireUser } from "@/lib/current-user";
 import { getNavItems } from "@/lib/nav";
 import { formatRupiah } from "@/lib/format";
 import { OPEN_PAYMENT_STATUSES, sisaTagihan } from "@/lib/payment";
-import { addWibDays, daysDiffWib, formatWibLong, parseWibDate, wibDateString, wibMonthRange } from "@/lib/datetime";
+import { addWibDays, daysDiffWib, parseWibDate, wibDateString, wibMonthRange } from "@/lib/datetime";
 import { CallLink } from "@/components/call-link";
 import { PageHeader, PrimaryLink } from "@/components/ui";
-import { PaymentBadge, ShipBadge } from "../invoices/invoice-badges";
+import { PaymentBadge } from "../invoices/invoice-badges";
 
-function listScrollClass(count: number, tall = false) {
+function listScrollClass(count: number) {
   if (count <= 5) return undefined;
-  const max = tall ? "max-h-[42rem]" : "max-h-[28rem]";
-  return `app-scroll ${max} overflow-y-auto overscroll-contain`;
+  return "app-scroll max-h-[22rem] overflow-y-auto overscroll-contain";
 }
 
 function KpiCard({
@@ -28,14 +27,18 @@ function KpiCard({
   href?: string;
 }) {
   const inner = (
-    <div className="panel h-full p-5 transition hover:border-slate-300">
+    <div className="panel h-full min-w-[11.5rem] p-3 transition hover:border-slate-300 lg:min-w-0 lg:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-slate-900 lg:mt-2 lg:text-2xl">{value}</p>
+      {hint ? <p className="mt-1 hidden text-xs text-slate-500 lg:block">{hint}</p> : null}
     </div>
   );
   if (!href) return inner;
-  return <Link href={href}>{inner}</Link>;
+  return (
+    <Link href={href} className="shrink-0 lg:shrink">
+      {inner}
+    </Link>
+  );
 }
 
 function TaskCard({
@@ -53,12 +56,12 @@ function TaskCard({
 }) {
   const bar = { rose: "bg-rose-500", amber: "bg-amber-500", steel: "bg-steel" }[tone];
   return (
-    <Link href={href} className="panel flex gap-4 p-4 transition hover:border-slate-300">
-      <span className={`mt-1 h-10 w-1 shrink-0 rounded-full ${bar}`} />
-      <span>
-        <span className="block text-sm font-medium text-slate-500">{label}</span>
-        <span className="mt-0.5 block text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</span>
-        <span className="mt-1 block text-xs text-slate-500">{hint}</span>
+    <Link href={href} className="panel flex flex-col p-3 transition hover:border-slate-300 lg:flex-row lg:gap-4 lg:p-4">
+      <span className={`mb-2 h-1 w-8 shrink-0 rounded-full lg:mb-0 lg:mt-1 lg:h-10 lg:w-1 ${bar}`} />
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-medium text-slate-500 lg:text-sm">{label}</span>
+        <span className="mt-0.5 block text-xl font-semibold tabular-nums tracking-tight text-slate-900 lg:text-2xl">{value}</span>
+        <span className="mt-1 hidden text-xs text-slate-500 lg:block">{hint}</span>
       </span>
     </Link>
   );
@@ -162,10 +165,11 @@ export default async function DashboardPage() {
   const piutangSisa = piutang.reduce((sum, row) => sum + sisaTagihan(row), 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 lg:space-y-8">
       <PageHeader title="Dashboard" description={`${current.tenant?.namaPt ?? ""} · ${todayLabel}`} />
+      <p className="text-sm text-slate-500 lg:hidden">{todayLabel}</p>
 
-      <section className="grid gap-3 lg:grid-cols-3">
+      <section className="grid grid-cols-3 gap-2 lg:gap-3">
         <TaskCard
           href="/reports/due-dates?filter=overdue"
           label="Overdue"
@@ -189,7 +193,7 @@ export default async function DashboardPage() {
         />
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="flex gap-3 overflow-x-auto pb-1 lg:grid lg:grid-cols-4 lg:overflow-visible">
         <KpiCard label="Omzet bulan ini" value={formatRupiah(omzet._sum.grandTotal ?? 0)} hint="Invoice aktif" href="/invoices" />
         <KpiCard
           label="Tagihan lunas"
@@ -222,31 +226,27 @@ export default async function DashboardPage() {
               Tidak ada tagihan yang sudah lewat atau jatuh tempo dalam {dueDays} hari.
             </p>
           ) : (
-            <ul className={listScrollClass(dueSoon.length, true)}>
+            <ul className={listScrollClass(dueSoon.length)}>
               {dueSoon.map((invoice) => {
                 const days = invoice.tanggalJatuhTempo ? daysDiffWib(now, invoice.tanggalJatuhTempo) : 0;
                 const overdue = days < 0;
                 const sisa = sisaTagihan(invoice);
                 const partial = invoice.jumlahTerbayar > 0;
                 return (
-                  <li key={invoice.id} className="border-t border-slate-100 px-5 py-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <Link href={`/invoices/${invoice.id}`} className="min-w-0 hover:text-steel-dark">
-                        <p className="text-sm font-semibold text-slate-900">{invoice.noInvoice}</p>
-                        <p className="text-sm text-slate-600">{invoice.customer.namaPt}</p>
-                        <p className="text-xs text-slate-500">
-                          Jatuh tempo {invoice.tanggalJatuhTempo ? formatWibLong(invoice.tanggalJatuhTempo) : "—"}
-                        </p>
-                      </Link>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold tabular-nums">{formatRupiah(partial ? sisa : invoice.grandTotal)}</p>
-                        {partial ? <p className="text-xs text-slate-500">Sisa dari {formatRupiah(invoice.grandTotal)}</p> : null}
-                        <p className={`text-xs font-semibold ${overdue ? "text-rose-700" : "text-amber-700"}`}>
-                          {overdue ? `Overdue ${Math.abs(days)} hari` : days === 0 ? "Hari ini" : `${days} hari lagi`}
-                        </p>
-                      </div>
+                  <li key={invoice.id} className="flex items-center gap-3 border-t border-slate-100 px-4 py-2.5">
+                    <Link href={`/invoices/${invoice.id}`} className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{invoice.customer.namaPt}</p>
+                      <p className="truncate text-xs text-slate-500">
+                        {invoice.noInvoice} · {overdue ? `Overdue ${Math.abs(days)} hari` : days === 0 ? "Hari ini" : `${days} hari lagi`}
+                      </p>
+                    </Link>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold tabular-nums">{formatRupiah(partial ? sisa : invoice.grandTotal)}</p>
+                      <p className={`text-xs font-semibold ${overdue ? "text-rose-700" : "text-amber-700"}`}>
+                        {overdue ? "Lewat" : "Tempo"}
+                      </p>
                     </div>
-                    <CallLink phone={invoice.customer.noTelp} pic={invoice.customer.picName} />
+                    <CallLink phone={invoice.customer.noTelp} pic={invoice.customer.picName} compact />
                   </li>
                 );
               })}
@@ -267,17 +267,15 @@ export default async function DashboardPage() {
             <ul className={listScrollClass(recent.length)}>
               {recent.map((invoice) => (
                 <li key={invoice.id} className="border-t border-slate-100">
-                  <Link href={`/invoices/${invoice.id}`} className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-slate-50">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{invoice.noInvoice}</p>
-                      <p className="text-sm text-slate-600">{invoice.customer.namaPt}</p>
-                      <p className="text-xs text-slate-500">{formatWibLong(invoice.tanggalInvoice)}</p>
+                  <Link href={`/invoices/${invoice.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{invoice.customer.namaPt}</p>
+                      <p className="truncate text-xs text-slate-500">{invoice.noInvoice}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold tabular-nums">{formatRupiah(invoice.grandTotal)}</p>
-                      <div className="mt-1 flex flex-wrap justify-end gap-1">
+                      <div className="mt-0.5 flex justify-end">
                         <PaymentBadge metode={invoice.metodePembayaran} status={invoice.statusPembayaran} />
-                        <ShipBadge status={invoice.statusPengiriman} />
                       </div>
                     </div>
                   </Link>

@@ -21,6 +21,7 @@ model Tenant {
   ppnPercentage    Float  @default(11.0)
   dashboardDueDays Int    @default(7)
   invoicePrefix    String @default("AMS/CKR/")
+  productPrefix    String @default("PRD-")
   bankInfo         String? @db.Text
   invoiceSignatory String  @default("Dody Heryanto")
   invoiceFooterNote String? @db.Text
@@ -97,6 +98,8 @@ model Product {
   updatedAt DateTime @updatedAt
 
   invoiceItems InvoiceItem[]
+
+  @@unique([tenantId, kodeProduk])
 }
 
 model Invoice {

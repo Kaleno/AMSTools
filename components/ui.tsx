@@ -26,19 +26,27 @@ export const thClass =
 export const trClass = "border-t border-slate-100 transition-colors hover:bg-slate-50";
 export const tdClass = "px-4 py-3.5 align-middle text-sm text-slate-700";
 export const moneyClass = "whitespace-nowrap px-4 py-3.5 text-right text-sm font-semibold tabular-nums text-slate-900";
+export const fitTableClass = "w-full border-collapse text-left text-[13px]";
+export const fitThClass =
+  "sticky top-0 z-10 whitespace-nowrap bg-slate-50 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+export const fitTdClass = "px-3 py-1.5 align-middle text-[13px] leading-tight text-slate-700";
+export const fitMoneyClass =
+  "whitespace-nowrap px-3 py-1.5 text-right text-[13px] font-semibold tabular-nums leading-tight text-slate-900";
 
 export function PageHeader({
   title,
   description,
   action,
+  showOnMobile = false,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  showOnMobile?: boolean;
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className={showOnMobile ? "min-w-0" : "hidden min-w-0 lg:block"}>
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h1>
         {description ? <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">{description}</p> : null}
       </div>

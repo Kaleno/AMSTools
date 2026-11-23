@@ -46,43 +46,43 @@ export default async function CustomersPage() {
             ))}
           </div>
           <div className="hidden md:block">
-          <TableWrap>
-            <table className={tableClass}>
-              <thead className={theadClass}>
-                <tr>
-                  <th className={thClass}>Customer</th>
-                  <th className={thClass}>PIC / Telp</th>
-                  <th className={thClass}>Alamat</th>
-                  <th className={thClass} />
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer) => (
-                  <tr key={customer.id} className={trClass}>
-                    <td className={tdClass}>
-                      <p className="font-medium text-slate-900">{customer.namaPt}</p>
-                      {customer.email ? <p className="text-xs text-slate-500">{customer.email}</p> : null}
-                    </td>
-                    <td className={tdClass}>
-                      <p>{customer.picName || "—"}</p>
-                      <p className="text-xs text-slate-500">{customer.noTelp}</p>
-                    </td>
-                    <td className={`${tdClass} max-w-xs text-slate-600`}>
-                      <p className="line-clamp-2">{customer.alamatPengiriman}</p>
-                    </td>
-                    <td className={`${tdClass} text-right`}>
-                      <div className="flex justify-end gap-3">
-                        <Link href={`/customers/${customer.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
-                          Edit
-                        </Link>
-                        <DeleteCustomerButton id={customer.id} disabled={customer._count.invoices > 0} />
-                      </div>
-                    </td>
+            <TableWrap>
+              <table className={tableClass}>
+                <thead className={theadClass}>
+                  <tr>
+                    <th className={thClass}>Customer</th>
+                    <th className={thClass}>PIC / Telp</th>
+                    <th className={thClass}>Alamat</th>
+                    <th className={thClass} />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                  {customers.map((customer) => (
+                    <tr key={customer.id} className={trClass}>
+                      <td className={tdClass}>
+                        <p className="font-medium text-slate-900">{customer.namaPt}</p>
+                        {customer.email ? <p className="text-xs text-slate-500">{customer.email}</p> : null}
+                      </td>
+                      <td className={tdClass}>
+                        <p>{customer.picName || "—"}</p>
+                        <p className="text-xs text-slate-500">{customer.noTelp}</p>
+                      </td>
+                      <td className={`${tdClass} max-w-xs text-slate-600`}>
+                        <p className="line-clamp-2">{customer.alamatPengiriman}</p>
+                      </td>
+                      <td className={`${tdClass} pr-12 text-right`}>
+                        <div className="flex justify-end gap-3">
+                          <Link href={`/customers/${customer.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
+                            Edit
+                          </Link>
+                          <DeleteCustomerButton id={customer.id} disabled={customer._count.invoices > 0} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
           </div>
         </>
       )}

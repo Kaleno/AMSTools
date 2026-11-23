@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { navGroupOrder, type NavIcon, type NavItem } from "@/lib/nav-shared";
 
-const icons: Record<NavIcon, LucideIcon> = {
+export const navIcons: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   companies: Building2,
   invoices: FileText,
@@ -44,7 +44,7 @@ export function SidebarNav({ items, onNavigate }: { items: NavItem[]; onNavigate
             <div className="space-y-0.5">
               {groupItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const Icon = icons[item.icon];
+                const Icon = navIcons[item.icon];
                 return (
                   <Link
                     key={item.href}

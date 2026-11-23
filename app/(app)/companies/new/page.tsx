@@ -7,7 +7,7 @@ export default async function NewCompanyPage() {
   await requireSuperAdmin();
   return (
     <div>
-      <PageHeader title="Tambah perusahaan" description="Buat PT baru dan akun Owner." />
+      <PageHeader showOnMobile title="Tambah perusahaan" description="Buat PT baru dan akun Owner." />
       <CompanyForm action={createCompany} submitLabel="Simpan" />
     </div>
   );

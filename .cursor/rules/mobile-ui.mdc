@@ -1,0 +1,20 @@
+---
+description: Setiap ubahan tampilan web AMS Tools wajib disesuaikan untuk HP/mobile. Bukan aturan cetak.
+alwaysApply: true
+---
+
+# UI web + mobile
+
+Tiap perubahan tampilan (halaman, form, tabel, tombol, badge, filter) **wajib** di-adjust untuk HP. Desktop selesai saja tidak cukup. Ini **bukan** soal cetak invoice/SJ.
+
+## Pola yang dipakai app ini
+
+- Daftar: kartu `md:hidden` + tabel `hidden md:block`. Jangan andalkan `overflow-x` tabel sebagai solusi HP.
+- Form: field full-width, `p-4` di HP / `lg:p-6` di desktop. Tombol simpan sticky `lg:hidden` di atas tabbar; versi desktop `hidden lg:flex`.
+- Jangan pakai `min-w-[700px]+` tanpa layout kartu di HP.
+- Tabbar bawah jangan ditutup konten: `pb-24` di HP.
+- Filter/tab: `overflow-x-auto`, jangan pecah layout.
+
+## Sebelum selesai
+
+Cek alur yang diubah di viewport ~390px: baca, tap, submit, tidak terpotong tabbar. Print continuous form tidak menggantikan cek mobile.

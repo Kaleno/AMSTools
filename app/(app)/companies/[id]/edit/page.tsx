@@ -18,7 +18,7 @@ export default async function EditCompanyPage({ params }: { params: { id: string
 
   return (
     <div>
-      <PageHeader title="Edit perusahaan" description={tenant.namaPt} />
+      <PageHeader showOnMobile title="Edit perusahaan" description={tenant.namaPt} />
       <CompanyForm
         action={action}
         submitLabel="Simpan perubahan"

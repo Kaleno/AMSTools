@@ -73,6 +73,7 @@ export function InvoiceForm({
   const [noInvoice, setNoInvoice] = useState(defaults?.noInvoice ?? suggestedNumber);
   const [numberTouched, setNumberTouched] = useState(!autoNumber);
   const [customerId, setCustomerId] = useState(defaults?.customerId ?? "");
+  const [showExtras, setShowExtras] = useState(false);
   const [metode, setMetode] = useState<"CASH" | "CREDIT">(defaults?.metodePembayaran ?? "CASH");
   const [usePpn, setUsePpn] = useState(defaults?.usePpn ?? false);
   const [useDiskon, setUseDiskon] = useState(defaults?.useDiskon ?? false);
@@ -128,11 +129,11 @@ export function InvoiceForm({
   const readOnly = Boolean(catatanOnly || itemsLocked);
 
   return (
-    <form action={formAction} className="space-y-6 pb-24 lg:pb-0">
+    <form action={formAction} className="space-y-4 pb-32 lg:space-y-6 lg:pb-0">
       <input type="hidden" name="itemsJson" value={JSON.stringify(lines.map(({ id, productId, qty, hargaSatuan }) => ({ id, productId, qty, hargaSatuan })))} />
       <ErrorText message={state?.error} />
 
-      <section className="space-y-4 panel p-6">
+      <section className="space-y-4 panel p-4 lg:p-6">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Tanggal">
             <input
@@ -195,7 +196,7 @@ export function InvoiceForm({
         </div>
       </section>
 
-      <section className="space-y-4 panel p-6">
+      <section className="space-y-4 panel p-4 lg:p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-slate-900">Item</h2>
           {readOnly ? null : (
@@ -275,7 +276,14 @@ export function InvoiceForm({
       </section>
 
       <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="space-y-4 panel p-6">
+        <button
+          type="button"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 lg:hidden"
+          onClick={() => setShowExtras((value) => !value)}
+        >
+          {showExtras ? "Sembunyikan diskon dan catatan" : "Diskon, PPN, dan catatan"}
+        </button>
+        <div className={`${showExtras ? "block" : "hidden"} space-y-4 panel p-4 lg:block lg:p-6`}>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="useDiskon" checked={useDiskon} onChange={(e) => setUseDiskon(e.target.checked)} disabled={readOnly} />
             Pakai diskon
@@ -309,7 +317,7 @@ export function InvoiceForm({
             <textarea name="catatan" rows={3} defaultValue={defaults?.catatan ?? ""} className={inputClass} />
           </Field>
         </div>
-        <div className="space-y-2 panel p-6 text-sm lg:sticky lg:top-0">
+        <div className="hidden space-y-2 panel p-4 text-sm lg:sticky lg:top-0 lg:block lg:p-6">
           <div className="flex justify-between">
             <span>Sub Total</span>
             <span>{formatRupiah(totals.subtotal)}</span>
@@ -333,14 +341,15 @@ export function InvoiceForm({
         </div>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 shadow-lg lg:hidden">
+      <div className="above-tabbar fixed inset-x-0 z-30 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 shadow-lg lg:hidden">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total tagihan</p>
           <p className="text-lg font-semibold tabular-nums text-slate-900">{formatRupiah(totals.grandTotal)}</p>
         </div>
+        <SubmitButton>{submitLabel}</SubmitButton>
       </div>
 
-      <div className="flex gap-2">
+      <div className="hidden gap-2 lg:flex">
         <SubmitButton>{submitLabel}</SubmitButton>
         <SecondaryLink href="/invoices">Batal</SecondaryLink>
       </div>

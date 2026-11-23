@@ -83,7 +83,13 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
           <Field label="Prefix nomor (contoh AMS/CKR/)">
             <input name="invoicePrefix" defaultValue={tenant.invoicePrefix} className={inputClass} />
           </Field>
+          <Field label="Prefix kode produk (contoh PRD-)">
+            <input name="productPrefix" defaultValue={tenant.productPrefix} className={inputClass} />
+          </Field>
         </div>
+        <p className="text-sm text-slate-500">
+          Produk baru otomatis bernomor {tenant.productPrefix || "PRD-"}0001, 0002, dst. Bisa diubah saat input.
+        </p>
       </section>
 
       <section className="space-y-4 panel p-6">

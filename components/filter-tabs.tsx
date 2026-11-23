@@ -14,7 +14,7 @@ export function FilterTabs({
   keep?: Record<string, string | undefined>;
 }) {
   return (
-    <div className="inline-flex max-w-full flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+    <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
       {options.map((option) => {
         const params = new URLSearchParams();
         if (keep) {
@@ -31,8 +31,8 @@ export function FilterTabs({
             href={href}
             className={
               active
-                ? "rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-900 shadow-sm"
-                : "rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                ? "shrink-0 whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-900 shadow-sm"
+                : "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
             }
           >
             {option.label}

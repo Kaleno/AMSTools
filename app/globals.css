@@ -19,6 +19,10 @@ body {
   background: #d5e6f2;
 }
 
+.above-tabbar {
+  bottom: calc(3.5rem + env(safe-area-inset-bottom));
+}
+
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;

@@ -28,12 +28,14 @@ export function RecordPaymentButton({
   today,
   emphasis = "primary",
   compact,
+  fullWidth,
 }: {
   id: string;
   remaining: number;
   today: string;
   emphasis?: "primary" | "secondary";
   compact?: boolean;
+  fullWidth?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -63,7 +65,7 @@ export function RecordPaymentButton({
   const parsed = digits ? Number(digits) : 0;
   const shown = parsed ? `Rp ${new Intl.NumberFormat("id-ID").format(parsed)}` : "";
   const baseClass = emphasis === "secondary" ? secondaryButtonClass : successButtonClass;
-  const triggerClassName = compact ? `${baseClass} px-3 py-1.5 text-xs` : baseClass;
+  const triggerClassName = fullWidth ? `${baseClass} w-full` : compact ? `${baseClass} px-3 py-1.5 text-xs` : baseClass;
 
   return (
     <>
@@ -141,7 +143,7 @@ export function RecordPaymentButton({
                     formData.set("tanggal", tanggal);
                     formData.set("catatan", catatan);
                     const result = await recordPayment(id, formData);
-                    if (result.error) {
+                    if (result?.error) {
                       setError(result.error);
                       return;
                     }

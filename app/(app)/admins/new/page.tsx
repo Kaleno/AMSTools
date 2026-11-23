@@ -7,7 +7,7 @@ export default async function NewAdminPage() {
   await requireRoles(["OWNER"]);
   return (
     <div>
-      <PageHeader title="Tambah Admin" />
+      <PageHeader showOnMobile title="Tambah Admin" />
       <AdminForm action={createAdmin} submitLabel="Simpan" />
     </div>
   );

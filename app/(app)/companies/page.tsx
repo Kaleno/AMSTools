@@ -27,6 +27,24 @@ export default async function CompaniesPage() {
       ) : (
         <>
           <ListSummary>{tenants.length} perusahaan</ListSummary>
+          <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
+            {tenants.map((tenant) => {
+              const owner = tenant.users[0];
+              return (
+                <div key={tenant.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{tenant.namaPt}</p>
+                    <p className="truncate text-xs text-slate-500">{owner?.name ?? tenant.telpPt}</p>
+                  </div>
+                  <Badge active={tenant.isActive} />
+                  <Link href={`/companies/${tenant.id}/edit`} className="text-sm font-medium text-steel">
+                    Edit
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block">
           <TableWrap>
             <table className={tableClass}>
               <thead className={theadClass}>
@@ -67,6 +85,7 @@ export default async function CompaniesPage() {
               </tbody>
             </table>
           </TableWrap>
+          </div>
         </>
       )}
     </div>

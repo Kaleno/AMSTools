@@ -2,9 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatWibLong } from "@/lib/datetime";
+import { remainingItemCount } from "@/lib/shipping";
 import { FilterTabs } from "@/components/filter-tabs";
 import { ClickableRow } from "@/components/clickable-row";
 import { EmptyState, ListSummary, PageHeader, TableWrap, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
+import { ShipBadge } from "@/app/(app)/invoices/invoice-badges";
 
 export default async function SuratJalanListPage({
   searchParams,
@@ -21,7 +23,15 @@ export default async function SuratJalanListPage({
       ...(status === "diterima" ? { statusPengiriman: "DITERIMA" } : {}),
     },
     orderBy: { tanggalSuratJalan: "desc" },
-    include: { invoice: { include: { customer: true } } },
+    include: {
+      invoice: {
+        include: {
+          customer: true,
+          items: true,
+          suratJalans: { include: { items: true } },
+        },
+      },
+    },
   });
 
   return (
@@ -54,6 +64,7 @@ export default async function SuratJalanListPage({
                     <p className="mt-1 text-xs text-slate-500">
                       {sj.invoice.noInvoice} · {formatWibLong(sj.tanggalSuratJalan)}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">{invoiceRemainLabel(sj.invoice)}</p>
                   </div>
                   <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
                 </div>
@@ -69,7 +80,8 @@ export default async function SuratJalanListPage({
                     <th className={thClass}>Invoice</th>
                     <th className={thClass}>Tujuan</th>
                     <th className={thClass}>Tanggal</th>
-                    <th className={thClass}>Status</th>
+                    <th className={thClass}>SJ</th>
+                    <th className={thClass}>Invoice kirim</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -86,6 +98,12 @@ export default async function SuratJalanListPage({
                       <td className={tdClass}>
                         <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
                       </td>
+                      <td className={tdClass}>
+                        <div className="flex flex-col gap-1">
+                          <ShipBadge status={sj.invoice.statusPengiriman} />
+                          <span className="text-xs text-slate-500">{invoiceRemainLabel(sj.invoice)}</span>
+                        </div>
+                      </td>
                     </ClickableRow>
                   ))}
                 </tbody>
@@ -96,6 +114,12 @@ export default async function SuratJalanListPage({
       )}
     </div>
   );
+}
+
+function invoiceRemainLabel(invoice: Parameters<typeof remainingItemCount>[0]) {
+  const sisa = remainingItemCount(invoice);
+  if (invoice.statusPengiriman === "TERKIRIM" || sisa === 0) return "Invoice terkirim semua";
+  return `Invoice sisa ${sisa} item`;
 }
 
 function StatusPill({ received }: { received: boolean }) {

@@ -25,6 +25,7 @@ export default async function EditInvoicePage({ params }: { params: { id: string
   return (
     <div>
       <PageHeader
+        showOnMobile
         title="Ubah Invoice"
         description={
           locks.catatanOnly

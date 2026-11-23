@@ -17,7 +17,7 @@ export default async function NewInvoicePage() {
 
   return (
     <div>
-      <PageHeader title="Buat Invoice" description={`Nomor otomatis ${suggestedNumber}, bisa diubah.`} />
+      <PageHeader showOnMobile title="Buat Invoice" description={`Nomor otomatis ${suggestedNumber}, bisa diubah.`} />
       {customers.length === 0 || products.length === 0 ? (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Isi master Customer dan Produk dulu sebelum membuat invoice.

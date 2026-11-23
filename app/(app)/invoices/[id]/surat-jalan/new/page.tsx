@@ -25,12 +25,16 @@ export default async function NewSuratJalanPage({ params }: { params: { id: stri
     kind: "suratJalan",
     date: today,
   });
+  const allRows = remainingByItem(invoice);
+  const rows = allRows.filter((row) => row.remaining > 0);
+  const alreadyShippedCount = allRows.length - rows.length;
 
   return (
     <div>
       <PageHeader
+        showOnMobile
         title="Buat Surat Jalan"
-        description={`${invoice.noInvoice} · ${invoice.customer.namaPt}. Kosongkan qty jika tidak dikirim di SJ ini.`}
+        description={`${invoice.noInvoice} · ${invoice.customer.namaPt}. Hanya sisa yang belum dikirim. Centang yang dibawa di SJ ini.`}
       />
       <SuratJalanForm
         action={createSuratJalan.bind(null, invoice.id)}
@@ -38,7 +42,8 @@ export default async function NewSuratJalanPage({ params }: { params: { id: stri
         suggestedNumber={suggestedNumber}
         tanggalDefault={today}
         noPo={invoice.noPo}
-        rows={remainingByItem(invoice)}
+        rows={rows}
+        alreadyShippedCount={alreadyShippedCount}
       />
     </div>
   );

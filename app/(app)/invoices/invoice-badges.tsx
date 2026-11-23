@@ -28,3 +28,9 @@ export function ShipBadge({ status }: { status: string }) {
   if (status === "SEBAGIAN") return <Pill tone="amber">Sebagian</Pill>;
   return <Pill tone="slate">Belum dikirim</Pill>;
 }
+
+export function ItemShipBadge({ status }: { status: "BELUM" | "PROSES" | "SELESAI" }) {
+  if (status === "SELESAI") return <Pill tone="steel">Selesai</Pill>;
+  if (status === "PROSES") return <Pill tone="amber">Proses</Pill>;
+  return <Pill tone="slate">Belum</Pill>;
+}

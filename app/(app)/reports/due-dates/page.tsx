@@ -66,33 +66,19 @@ export default async function DueDatesPage({
           <ListSummary>
             {invoices.length} invoice · sisa <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
           </ListSummary>
-          <div className="space-y-2 md:hidden">
+          <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
             {invoices.map((invoice) => {
               const days = invoice.tanggalJatuhTempo ? daysDiffWib(now, invoice.tanggalJatuhTempo) : 0;
               const sisa = sisaTagihan(invoice);
               return (
-                <div key={invoice.id} className="panel p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link href={`/invoices/${invoice.id}`} className="font-semibold text-steel">
-                        {invoice.noInvoice}
-                      </Link>
-                      <p className="text-sm text-slate-600">{invoice.customer.namaPt}</p>
-                      <DueLabel days={days} />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold tabular-nums">{formatRupiah(sisa)}</p>
-                      {invoice.jumlahTerbayar > 0 ? (
-                        <p className="text-xs text-slate-500">dari {formatRupiah(invoice.grandTotal)}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <CallLink phone={invoice.customer.noTelp} pic={invoice.customer.picName} />
-                  {canPay ? (
-                    <div className="mt-3">
-                      <RecordPaymentButton id={invoice.id} remaining={sisa} today={today} compact />
-                    </div>
-                  ) : null}
+                <div key={invoice.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <Link href={`/invoices/${invoice.id}`} className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{invoice.customer.namaPt}</p>
+                    <p className="truncate text-xs text-slate-500">{invoice.noInvoice}</p>
+                    <DueLabel days={days} />
+                  </Link>
+                  <p className="text-sm font-semibold tabular-nums">{formatRupiah(sisa)}</p>
+                  <CallLink phone={invoice.customer.noTelp} pic={invoice.customer.picName} compact />
                 </div>
               );
             })}

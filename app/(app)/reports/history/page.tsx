@@ -90,6 +90,24 @@ export default async function PurchaseHistoryPage({
             <p className="mb-3 text-sm text-slate-500">
               {summaries.length} customer · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
             </p>
+            <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
+              {summaries.map(([id, row]) => (
+                <Link
+                  key={id}
+                  href={`/reports/history?customerId=${id}&from=${from}&to=${to}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{row.namaPt}</p>
+                    <p className="text-xs text-slate-500">
+                      {row.count} invoice · {formatWibLong(row.last)}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold tabular-nums">{formatRupiah(row.total)}</p>
+                </Link>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <TableWrap>
               <table className={tableClass}>
                 <thead className={theadClass}>
@@ -119,6 +137,7 @@ export default async function PurchaseHistoryPage({
                 </tbody>
               </table>
             </TableWrap>
+            </div>
           </div>
 
           {selected ? (

@@ -14,7 +14,7 @@ export default async function EditAdminPage({ params }: { params: { id: string }
 
   return (
     <div>
-      <PageHeader title="Edit Admin" description={admin.email} />
+      <PageHeader showOnMobile title="Edit Admin" description={admin.email} />
       <AdminForm action={updateAdmin.bind(null, admin.id)} admin={admin} submitLabel="Simpan" />
     </div>
   );

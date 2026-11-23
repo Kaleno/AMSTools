@@ -30,3 +30,13 @@ export function computeStatusPengiriman(invoice: InvoiceShipping) {
 export function hasRemaining(invoice: InvoiceShipping) {
   return remainingByItem(invoice).some((row) => row.remaining > 0);
 }
+
+export function remainingItemCount(invoice: InvoiceShipping) {
+  return remainingByItem(invoice).filter((row) => row.remaining > 0).length;
+}
+
+export function itemShipStatus(row: { shipped: number; remaining: number }) {
+  if (row.shipped <= 0) return "BELUM" as const;
+  if (row.remaining > 0) return "PROSES" as const;
+  return "SELESAI" as const;
+}

@@ -6,9 +6,9 @@ import { formatRupiah } from "@/lib/format";
 import { formatWibLong, wibDateString } from "@/lib/datetime";
 import { invoiceLocks } from "@/lib/invoice-lock";
 import { sisaTagihan } from "@/lib/payment";
-import { hasRemaining, remainingByItem } from "@/lib/shipping";
-import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, TableWrap, moneyClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
-import { DocBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
+import { hasRemaining, itemShipStatus, remainingByItem } from "@/lib/shipping";
+import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, moneyClass, primaryButtonClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { DocBadge, ItemShipBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
 import { RecordPaymentButton, VoidButton } from "../invoice-actions";
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
@@ -53,14 +53,32 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-28 lg:pb-0">
+      <div className="above-tabbar fixed inset-x-0 z-30 border-t border-slate-200 bg-white px-4 py-2 lg:hidden">
+        {canCreateSj ? (
+          <Link href={`/invoices/${invoice.id}/surat-jalan/new`} className={`${primaryButtonClass} w-full`}>
+            Buat Surat Jalan
+          </Link>
+        ) : locks.canRecordPayment ? (
+          <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis="primary" fullWidth />
+        ) : null}
+        <div className="mt-1 flex items-center justify-around">
+          {canCreateSj && locks.canRecordPayment ? (
+            <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis="secondary" compact />
+          ) : null}
+          <SecondaryLink href={`/print/invoice/${invoice.id}`}>Cetak</SecondaryLink>
+          <SecondaryLink href={`/invoices/${invoice.id}/edit`}>Ubah</SecondaryLink>
+          {locks.canVoid ? <VoidButton id={invoice.id} /> : null}
+        </div>
+      </div>
       <div>
         <BackLink href="/invoices">Invoice</BackLink>
         <PageHeader
+          showOnMobile
           title={invoice.noInvoice}
           description={invoice.customer.namaPt}
           action={
-            <>
+            <div className="hidden lg:contents">
               {canCreateSj ? <PrimaryLink href={`/invoices/${invoice.id}/surat-jalan/new`}>Buat Surat Jalan</PrimaryLink> : null}
               {locks.canRecordPayment ? (
                 <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis={payEmphasis} />
@@ -68,7 +86,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               <SecondaryLink href={`/print/invoice/${invoice.id}`}>Cetak</SecondaryLink>
               <SecondaryLink href={`/invoices/${invoice.id}/edit`}>Ubah</SecondaryLink>
               {locks.canVoid ? <VoidButton id={invoice.id} /> : null}
-            </>
+            </div>
           }
         />
         <div className="flex flex-wrap gap-1.5">
@@ -80,29 +98,59 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
       <MetaGrid items={meta} />
 
-      <TableWrap>
+      <div className="panel overflow-hidden">
+        <div className="divide-y divide-slate-100 md:hidden">
+          {invoice.items.map((item) => {
+            const remain = remainRows.find((row) => row.id === item.id);
+            return (
+            <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{item.namaProduk}</p>
+                <p className="text-xs text-slate-500">
+                  {item.qty} {item.satuan} × {formatRupiah(item.hargaSatuan)}
+                </p>
+                {remain ? (
+                  <div className="mt-1">
+                    <ItemShipBadge status={itemShipStatus(remain)} />
+                  </div>
+                ) : null}
+              </div>
+              <p className="text-sm font-semibold tabular-nums text-slate-900">{formatRupiah(item.subtotal)}</p>
+            </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block">
         <table className={tableClass}>
           <thead className={theadClass}>
             <tr>
               <th className={thClass}>Nama Barang</th>
               <th className={thClass}>Qty</th>
               <th className={thClass}>Satuan</th>
+              <th className={thClass}>Kirim</th>
               <th className={`${thClass} text-right`}>Harga / pcs</th>
               <th className={`${thClass} text-right`}>Total</th>
             </tr>
           </thead>
           <tbody>
-            {invoice.items.map((item) => (
+            {invoice.items.map((item) => {
+              const remain = remainRows.find((row) => row.id === item.id);
+              return (
               <tr key={item.id} className={trClass}>
                 <td className={tdClass}>{item.namaProduk}</td>
                 <td className={`${tdClass} tabular-nums`}>{item.qty}</td>
                 <td className={tdClass}>{item.satuan}</td>
+                <td className={tdClass}>
+                  {remain ? <ItemShipBadge status={itemShipStatus(remain)} /> : null}
+                </td>
                 <td className={moneyClass}>{formatRupiah(item.hargaSatuan)}</td>
                 <td className={moneyClass}>{formatRupiah(item.subtotal)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
+        </div>
         <div className="space-y-1 border-t border-slate-100 px-5 py-4 text-sm">
           <div className="flex justify-end gap-8 text-slate-500">
             <span>Sub Total</span>
@@ -139,7 +187,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             </div>
           ) : null}
         </div>
-      </TableWrap>
+      </div>
 
       {invoice.catatan ? (
         <p className="panel px-5 py-4 text-sm text-slate-600">
@@ -152,7 +200,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         <section className="panel p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-900">Pembayaran</h2>
           {invoice.pembayarans.length === 0 ? (
-            <p className="text-sm text-slate-500">Belum ada pembayaran. DP dan pelunasan dicatat di sini.</p>
+            invoice.jumlahTerbayar > 0 ? (
+              <p className="text-sm text-slate-600">
+                Terbayar {formatRupiah(invoice.jumlahTerbayar)}
+                {invoice.tanggalLunas ? ` pada ${formatWibLong(invoice.tanggalLunas)}` : ""}. Rincian pembayaran belum tersimpan.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">Belum ada pembayaran. DP dan pelunasan dicatat di sini.</p>
+            )
           ) : (
             <ul className="divide-y divide-slate-100">
               {invoice.pembayarans.map((payment) => (
@@ -186,7 +241,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             return (
               <div key={row.id}>
                 <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-                  <p className="font-medium text-slate-800">{row.namaProduk}</p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="font-medium text-slate-800">{row.namaProduk}</p>
+                    <ItemShipBadge status={itemShipStatus(row)} />
+                  </div>
                   <p className="tabular-nums text-slate-500">
                     {row.shipped}/{row.qty} · sisa {row.remaining}
                   </p>
