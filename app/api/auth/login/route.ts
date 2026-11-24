@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { sessionCookieOptions, signSession } from "@/lib/auth";
 import { sessionClaims } from "@/lib/session-cookie";
+import { DUMMY_PASSWORD_HASH, LOGIN_FAILURE_MESSAGE, LOGIN_RATE_LIMIT_MESSAGE, loginIsRejected } from "@/lib/login-guard";
+import { clientAddress, loginRateLimiter } from "@/lib/login-rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -19,33 +21,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email dan password wajib diisi." }, { status: 400 });
     }
 
+    const ip = clientAddress(request.headers);
+    const limited = loginRateLimiter.check(ip, email);
+    if (limited.limited) {
+      return NextResponse.json(
+        { error: LOGIN_RATE_LIMIT_MESSAGE },
+        { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } },
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: { tenant: { select: { isActive: true } } },
     });
 
-    if (!user || !user.isActive) {
-      return NextResponse.json({ error: "Email atau password salah." }, { status: 401 });
+    const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (
+      !user ||
+      loginIsRejected(
+        {
+          isActive: user.isActive,
+          role: user.role,
+          tenantId: user.tenantId,
+          tenant: user.tenant,
+        },
+        passwordMatches,
+      )
+    ) {
+      loginRateLimiter.recordFailure(ip, email);
+      return NextResponse.json({ error: LOGIN_FAILURE_MESSAGE }, { status: 401 });
     }
 
-    if (user.tenant && !user.tenant.isActive) {
-      return NextResponse.json(
-        { error: "Akun perusahaan dinonaktifkan. Hubungi administrator." },
-        { status: 403 },
-      );
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return NextResponse.json({ error: "Email atau password salah." }, { status: 401 });
-    }
-
-    if (user.role !== "SUPER_ADMIN" && !user.tenantId) {
-      return NextResponse.json({ error: "Akun tidak terhubung ke perusahaan." }, { status: 403 });
-    }
+    loginRateLimiter.clear(ip, email);
 
     const token = await signSession(sessionClaims(user));
-
     const response = NextResponse.json({
       ok: true,
       mustChangePassword: user.mustChangePassword,
