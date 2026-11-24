@@ -3,16 +3,31 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatRupiah } from "@/lib/format";
 import { EmptyState, ListSummary, PageHeader, PrimaryLink, SecondaryLink, TableWrap, moneyClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { DeleteProductButton } from "./delete-button";
 import { ProductImportForm } from "./import-form";
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const current = await requirePermission("canManageMasterData");
-  const products = await prisma.product.findMany({
-    where: { tenantId: current.tenant.id },
-    orderBy: { namaProduk: "asc" },
-    include: { _count: { select: { invoiceItems: true } } },
-  });
+  const query = await searchParams;
+  const where = { tenantId: current.tenant.id };
+  const totalCount = await prisma.product.count({ where });
+  const paging = pageWindow(query.page, totalCount);
+  const products =
+    totalCount === 0
+      ? []
+      : await prisma.product.findMany({
+          where,
+          orderBy: [{ namaProduk: "asc" }, { id: "asc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: { _count: { select: { invoiceItems: true } } },
+        });
 
   return (
     <div>
@@ -38,7 +53,7 @@ export default async function ProductsPage() {
         />
       ) : (
         <>
-          <ListSummary>{products.length} produk</ListSummary>
+          <ListSummary>{totalCount} produk</ListSummary>
           <div className="space-y-2 md:hidden">
             {products.map((product) => (
               <div key={product.id} className="panel p-4">
@@ -92,6 +107,7 @@ export default async function ProductsPage() {
               </table>
             </TableWrap>
           </div>
+          <ListPager pathname="/products" paging={paging} />
         </>
       )}
     </div>

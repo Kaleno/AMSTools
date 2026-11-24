@@ -6,35 +6,44 @@ import { remainingItemCount } from "@/lib/shipping";
 import { FilterTabs } from "@/components/filter-tabs";
 import { ClickableRow } from "@/components/clickable-row";
 import { EmptyState, ListSummary, PageHeader, TableWrap, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { DocBadge, ShipBadge } from "@/app/(app)/invoices/invoice-badges";
 
 export default async function SuratJalanListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const current = await requirePermission("canManageSuratJalan");
   const query = await searchParams;
   const status = query.status ?? "semua";
-
-  const rows = await prisma.suratJalan.findMany({
-    where: {
-      tenantId: current.tenant.id,
-      ...(status === "dikirim" ? { statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } } : {}),
-      ...(status === "diterima" ? { statusPengiriman: "DITERIMA" } : {}),
-      ...(status === "batal" ? { statusPengiriman: "BATAL" } : {}),
-    },
-    orderBy: { tanggalSuratJalan: "desc" },
-    include: {
-      invoice: {
-        include: {
-          customer: true,
-          items: true,
-          suratJalans: { include: { items: true } },
-        },
-      },
-    },
-  });
+  const where = {
+    tenantId: current.tenant.id,
+    ...(status === "dikirim" ? { statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } } : {}),
+    ...(status === "diterima" ? { statusPengiriman: "DITERIMA" } : {}),
+    ...(status === "batal" ? { statusPengiriman: "BATAL" } : {}),
+  };
+  const totalCount = await prisma.suratJalan.count({ where });
+  const paging = pageWindow(query.page, totalCount);
+  const rows =
+    totalCount === 0
+      ? []
+      : await prisma.suratJalan.findMany({
+          where,
+          orderBy: [{ tanggalSuratJalan: "desc" }, { id: "desc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: {
+            invoice: {
+              include: {
+                customer: true,
+                items: true,
+                suratJalans: { include: { items: true } },
+              },
+            },
+          },
+        });
 
   return (
     <div>
@@ -56,7 +65,7 @@ export default async function SuratJalanListPage({
         <EmptyState title="Belum ada Surat Jalan" hint="Buka Invoice lalu pilih Buat Surat Jalan." />
       ) : (
         <>
-          <ListSummary>{rows.length} surat jalan</ListSummary>
+          <ListSummary>{totalCount} surat jalan</ListSummary>
           <div className="space-y-2 md:hidden">
             {rows.map((sj) => (
               <Link key={sj.id} href={`/surat-jalan/${sj.id}`} className="panel block p-4">
@@ -119,6 +128,7 @@ export default async function SuratJalanListPage({
               </table>
             </TableWrap>
           </div>
+          <ListPager pathname="/surat-jalan" paging={paging} params={{ status }} />
         </>
       )}
     </div>
