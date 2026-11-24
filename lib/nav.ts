@@ -40,5 +40,9 @@ export function getNavItems(current: CurrentUser): NavItem[] {
     items.push({ href: "/settings", label: "Pengaturan", icon: "settings", group: "Kelola" });
   }
 
+  if (role === "SUPER_ADMIN" || role === "ADMIN") {
+    items.push({ href: "/account", label: "Profil", icon: "settings", group: "Kelola" });
+  }
+
   return items;
 }
