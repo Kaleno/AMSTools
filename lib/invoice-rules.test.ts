@@ -112,3 +112,37 @@ test("cash and in-transit surat jalan cannot be voided, and cash method stays lo
   assert.equal(zeroCredit.canRecordPayment, false);
   assert.equal(zeroCredit.canVoid, true);
 });
+
+test("void is allowed only when every surat jalan is batal", () => {
+  const active = invoiceLocks(invoice({ suratJalans: [{ statusPengiriman: "DIKIRIM" }] }));
+  assert.equal(active.canVoid, false);
+  assert.equal(active.numberLocked, true);
+
+  const mixed = invoiceLocks(
+    invoice({
+      suratJalans: [{ statusPengiriman: "BATAL" }, { statusPengiriman: "DIKIRIM" }],
+    }),
+  );
+  assert.equal(mixed.canVoid, false);
+  assert.equal(mixed.numberLocked, true);
+
+  const allBatal = invoiceLocks(
+    invoice({
+      suratJalans: [{ statusPengiriman: "BATAL" }, { statusPengiriman: "BATAL" }],
+    }),
+  );
+  assert.equal(allBatal.canVoid, true);
+  assert.equal(allBatal.numberLocked, false);
+  assert.equal(allBatal.itemsLocked, false);
+  assert.equal(allBatal.voidBlockMessage, null);
+
+  const diterima = invoiceLocks(
+    invoice({
+      suratJalans: [{ statusPengiriman: "DITERIMA" }, { statusPengiriman: "BATAL" }],
+    }),
+  );
+  assert.equal(diterima.canVoid, false);
+  assert.equal(diterima.hasDiterima, true);
+  assert.equal(diterima.itemsLocked, true);
+  assert.equal(diterima.catatanOnly, true);
+});

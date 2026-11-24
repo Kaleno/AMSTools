@@ -6,7 +6,7 @@ import { formatRupiah } from "@/lib/format";
 import { formatWibLong, wibDateString } from "@/lib/datetime";
 import { invoiceLocks } from "@/lib/invoice-lock";
 import { sisaTagihan, sumPembayaran } from "@/lib/payment";
-import { hasRemaining, itemShipStatus, remainingByItem } from "@/lib/shipping";
+import { hasRemaining, itemShipStatus, remainingByItem, suratJalanStatusLabel } from "@/lib/shipping";
 import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, moneyClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { DocBadge, ItemShipBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
 import { RecordPaymentButton, VoidButton } from "../invoice-actions";
@@ -296,10 +296,12 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             <ul className="space-y-2 text-sm">
               {invoice.suratJalans.map((sj) => (
                 <li key={sj.id} className="flex items-center justify-between gap-3">
-                  <Link href={`/surat-jalan/${sj.id}`} className="font-medium text-steel hover:text-steel-dark">
+                  <Link href={`/surat-jalan/${sj.id}`} className="min-w-0 break-all font-medium text-steel hover:text-steel-dark">
                     {sj.noSuratJalan}
                   </Link>
-                  <span className="text-xs text-slate-500">{sj.statusPengiriman === "DITERIMA" ? "Diterima" : "Dikirim"}</span>
+                  <span className={`shrink-0 text-xs ${sj.statusPengiriman === "BATAL" ? "font-medium text-rose-700" : "text-slate-500"}`}>
+                    {suratJalanStatusLabel(sj.statusPengiriman)}
+                  </span>
                 </li>
               ))}
             </ul>

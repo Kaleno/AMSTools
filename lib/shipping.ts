@@ -1,5 +1,5 @@
 import type { Invoice, InvoiceItem, SuratJalan, SuratJalanItem } from "@prisma/client";
-import { shippedQtyByItem } from "@/lib/invoice-lock";
+import { activeSuratJalans, shippedQtyByItem } from "@/lib/invoice-lock";
 
 type InvoiceShipping = Invoice & {
   items: InvoiceItem[];
@@ -7,7 +7,10 @@ type InvoiceShipping = Invoice & {
 };
 
 export function remainingByItem(invoice: InvoiceShipping) {
-  const shipped = shippedQtyByItem(invoice);
+  const shipped = shippedQtyByItem({
+    ...invoice,
+    suratJalans: activeSuratJalans(invoice.suratJalans),
+  });
   return invoice.items.map((item) => {
     const already = shipped.get(item.id) ?? 0;
     return {
@@ -33,6 +36,12 @@ export function hasRemaining(invoice: InvoiceShipping) {
 
 export function remainingItemCount(invoice: InvoiceShipping) {
   return remainingByItem(invoice).filter((row) => row.remaining > 0).length;
+}
+
+export function suratJalanStatusLabel(status: string) {
+  if (status === "DITERIMA") return "Diterima";
+  if (status === "BATAL") return "Batal";
+  return "Dikirim";
 }
 
 export function itemShipStatus(row: { shipped: number; remaining: number }) {

@@ -59,11 +59,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdInvoices    Invoice[]    @relation("InvoiceCreator")
-  updatedInvoices    Invoice[]    @relation("InvoiceUpdater")
-  createdSuratJalans SuratJalan[] @relation("SjCreator")
-  paidInvoices       Invoice[]    @relation("InvoicePaidBy")
-  pembayarans        Pembayaran[] @relation("PaymentCreator")
+  createdInvoices      Invoice[]    @relation("InvoiceCreator")
+  updatedInvoices      Invoice[]    @relation("InvoiceUpdater")
+  createdSuratJalans   SuratJalan[] @relation("SjCreator")
+  cancelledSuratJalans SuratJalan[] @relation("SjCanceller")
+  paidInvoices         Invoice[]    @relation("InvoicePaidBy")
+  pembayarans          Pembayaran[] @relation("PaymentCreator")
 }
 
 model Customer {
@@ -186,6 +187,10 @@ model SuratJalan {
   buktiTerimaUrl    String?
   tanggalDiterima   DateTime?
   catatanPengiriman String?   @db.Text
+  alasanBatal       String?   @db.Text
+  batalAt           DateTime?
+  batalById         String?
+  batalBy           User?     @relation("SjCanceller", fields: [batalById], references: [id])
 
   createdById String
   createdBy   User   @relation("SjCreator", fields: [createdById], references: [id])

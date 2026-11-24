@@ -5,10 +5,15 @@ type InvoiceWithSj = Invoice & {
   suratJalans: (SuratJalan & { items?: SuratJalanItem[] })[];
 };
 
+export function activeSuratJalans<T extends { statusPengiriman?: string | null }>(rows: T[]) {
+  return rows.filter((row) => row.statusPengiriman !== "BATAL");
+}
+
 export function invoiceLocks(invoice: InvoiceWithSj) {
   const isVoid = invoice.statusDokumen === "VOID";
-  const hasSj = invoice.suratJalans.length > 0;
-  const hasDiterima = invoice.suratJalans.some((sj) => sj.statusPengiriman === "DITERIMA");
+  const active = activeSuratJalans(invoice.suratJalans);
+  const hasSj = active.length > 0;
+  const hasDiterima = active.some((sj) => sj.statusPengiriman === "DITERIMA");
   const isCash = invoice.metodePembayaran === "CASH";
   const paid = Math.round(invoice.jumlahTerbayar);
   // Money actually recorded. A Rp0 tempo invoice is LUNAS with paid 0, and stays editable.
@@ -63,7 +68,7 @@ export function invoiceLocks(invoice: InvoiceWithSj) {
 
 export function shippedQtyByItem(invoice: InvoiceWithSj) {
   const map = new Map<string, number>();
-  for (const sj of invoice.suratJalans) {
+  for (const sj of activeSuratJalans(invoice.suratJalans)) {
     for (const item of sj.items ?? []) {
       map.set(item.invoiceItemId, (map.get(item.invoiceItemId) ?? 0) + item.qty);
     }
