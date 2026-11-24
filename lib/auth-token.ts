@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { assertProductionJwtSecret } from "@/lib/production-secrets";
 
 export const SESSION_COOKIE = "ams_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
@@ -25,6 +26,7 @@ export function readSessionVersion(value: unknown): number | null {
 }
 
 function getJwtSecret() {
+  assertProductionJwtSecret();
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 16) {
     throw new Error("JWT_SECRET belum diset atau terlalu pendek.");
