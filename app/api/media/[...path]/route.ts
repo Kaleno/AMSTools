@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
-import { readUpload } from "@/lib/uploads";
+import { resolveMediaPath } from "@/lib/media-path";
+import { readUpload, uploadsRoot } from "@/lib/uploads";
 
 const TYPES: Record<string, string> = {
   png: "image/png",
@@ -9,7 +10,7 @@ const TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const current = await getCurrentUser();
   if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,28 +20,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
   }
   const session = current.session;
 
-  const { path } = await params;
-  const relative = path.join("/");
-  if (relative.startsWith("logos/")) {
-    const tenantFromFile = relative.replace(/^logos\//, "").replace(/\.[^.]+$/, "");
-    if (session.role !== "SUPER_ADMIN" && session.tenantId !== tenantFromFile) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else if (relative.startsWith("proofs/")) {
-    const tenantFromFile = relative.split("/")[1];
-    if (session.role !== "SUPER_ADMIN" && session.tenantId !== tenantFromFile) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else {
+  const { path: segments } = await params;
+  const resolved = resolveMediaPath(segments ?? [], uploadsRoot(), new URL(request.url).pathname);
+  if (!resolved.ok) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (session.role !== "SUPER_ADMIN" && session.tenantId !== resolved.tenantId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
-    const file = await readUpload(relative);
-    const ext = relative.split(".").pop()?.toLowerCase() ?? "png";
+    const file = await readUpload(resolved.relative);
     return new NextResponse(new Uint8Array(file), {
       headers: {
-        "Content-Type": TYPES[ext] ?? "application/octet-stream",
+        "Content-Type": TYPES[resolved.extension] ?? "application/octet-stream",
         "Cache-Control": "private, max-age=3600",
       },
     });
