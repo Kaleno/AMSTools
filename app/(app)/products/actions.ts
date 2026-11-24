@@ -28,7 +28,11 @@ function str(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-async function resolveKode(tenant: { id: string; productPrefix: string }, kode: string, excludeId?: string) {
+async function resolveKode(
+  tenant: { id: string; productPrefix: string },
+  kode: string,
+  excludeId?: string,
+): Promise<{ error: string } | { kode: string }> {
   const value = kode || (await nextProductCode({ tenant }));
   if (await kodeProdukTaken(tenant.id, value, excludeId)) {
     return { error: `Kode ${value} sudah dipakai.` };
