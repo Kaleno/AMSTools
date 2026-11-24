@@ -28,7 +28,9 @@ function KpiCard({
 }) {
   const inner = (
     <div className="panel h-full min-w-[11.5rem] p-3 transition hover:border-slate-300 lg:min-w-0 lg:p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-tight tracking-normal text-slate-400 lg:tracking-wide">
+        {label}
+      </p>
       <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-slate-900 lg:mt-2 lg:text-2xl">{value}</p>
       {hint ? <p className="mt-1 hidden text-xs text-slate-500 lg:block">{hint}</p> : null}
     </div>
@@ -44,22 +46,33 @@ function KpiCard({
 function TaskCard({
   href,
   label,
+  shortLabel,
   value,
   hint,
   tone,
 }: {
   href: string;
   label: string;
+  shortLabel?: string;
   value: string;
   hint: string;
   tone: "rose" | "amber" | "steel";
 }) {
   const bar = { rose: "bg-rose-500", amber: "bg-amber-500", steel: "bg-steel" }[tone];
   return (
-    <Link href={href} className="panel flex flex-col p-3 transition hover:border-slate-300 lg:flex-row lg:gap-4 lg:p-4">
+    <Link href={href} className="panel flex min-w-0 flex-col p-3 transition hover:border-slate-300 lg:flex-row lg:gap-4 lg:p-4">
       <span className={`mb-2 h-1 w-8 shrink-0 rounded-full lg:mb-0 lg:mt-1 lg:h-10 lg:w-1 ${bar}`} />
       <span className="min-w-0">
-        <span className="block truncate text-xs font-medium text-slate-500 lg:text-sm">{label}</span>
+        <span className="block whitespace-normal break-words text-xs font-medium leading-snug text-slate-500 lg:text-sm">
+          {shortLabel ? (
+            <>
+              <span className="sm:hidden">{shortLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </>
+          ) : (
+            label
+          )}
+        </span>
         <span className="mt-0.5 block text-xl font-semibold tabular-nums tracking-tight text-slate-900 lg:text-2xl">{value}</span>
         <span className="mt-1 hidden text-xs text-slate-500 lg:block">{hint}</span>
       </span>
@@ -180,6 +193,7 @@ export default async function DashboardPage() {
         <TaskCard
           href="/reports/due-dates?filter=minggu"
           label={`Jatuh tempo ${dueDays} hari`}
+          shortLabel={`Tempo ${dueDays} hari`}
           value={String(dueWeekCount)}
           hint={`Jatuh tempo dalam ${dueDays} hari ke depan`}
           tone={dueWeekCount > 0 ? "amber" : "steel"}
@@ -187,6 +201,7 @@ export default async function DashboardPage() {
         <TaskCard
           href="/surat-jalan?status=dikirim"
           label="Menunggu bukti"
+          shortLabel="Bukti terima"
           value={String(sjPending)}
           hint="Surat jalan belum ada foto terima"
           tone={sjPending > 0 ? "amber" : "steel"}
