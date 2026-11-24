@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { inputClass, primaryButtonClass } from "@/components/ui";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
 export function LoginForm() {
   const router = useRouter();
@@ -33,8 +34,7 @@ export function LoginForm() {
         router.refresh();
         return;
       }
-      const from = searchParams.get("from");
-      router.replace(from && from.startsWith("/") ? from : "/dashboard");
+      router.replace(safeInternalPath(searchParams.get("from")));
       router.refresh();
     } catch {
       setError("Tidak bisa terhubung ke server.");
