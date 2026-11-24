@@ -4,7 +4,8 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/current-user";
-import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
+import { settingsOwnPasswordMessage } from "@/lib/own-password";
+import { passwordFrom } from "@/lib/password-policy";
 import { setSessionCookie } from "@/lib/session-cookie";
 import { saveTenantLogo } from "@/lib/uploads";
 
@@ -33,6 +34,7 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   const ppnRaw = str(formData, "ppnPercentage");
   const ppnPercentage = Number(ppnRaw || "11");
   const dueDays = Number(str(formData, "dashboardDueDays") || "7");
+  const currentPassword = passwordFrom(formData, "currentPassword");
   const newPassword = passwordFrom(formData, "newPassword");
   const confirmPassword = passwordFrom(formData, "confirmPassword");
 
@@ -56,12 +58,17 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
     }
   }
 
-  if (newPassword || confirmPassword) {
-    if (newPassword !== confirmPassword) {
-      return { error: "Konfirmasi password tidak sama." };
-    }
-    const policy = passwordPolicyMessage(newPassword);
-    if (policy) return { error: policy };
+  if (currentPassword || newPassword || confirmPassword) {
+    const currentMatches = currentPassword
+      ? await bcrypt.compare(currentPassword, current.user.passwordHash)
+      : false;
+    const message = settingsOwnPasswordMessage({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      currentMatches,
+    });
+    if (message) return { error: message };
     const updated = await prisma.user.update({
       where: { id: current.user.id },
       data: {

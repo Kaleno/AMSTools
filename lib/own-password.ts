@@ -20,3 +20,16 @@ export function ownPasswordChangeMessage(input: {
   }
   return passwordPolicyMessage(input.newPassword);
 }
+
+/** Owner settings can save without touching the password. Any filled field starts a change. */
+export function settingsOwnPasswordMessage(input: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  currentMatches: boolean;
+}): string | null {
+  if (!input.currentPassword && !input.newPassword && !input.confirmPassword) {
+    return null;
+  }
+  return ownPasswordChangeMessage(input);
+}
