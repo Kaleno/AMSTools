@@ -1,3 +1,5 @@
+import { securityHeaders } from "./lib/security-headers.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
@@ -8,6 +10,10 @@ const nextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders(process.env.NODE_ENV),
+      },
       {
         source: "/sw.js",
         headers: [
