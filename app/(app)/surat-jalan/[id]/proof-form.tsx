@@ -16,6 +16,9 @@ export function ProofForm({ suratJalanId, replace }: { suratJalanId: string; rep
   return (
     <form action={formAction} className="space-y-3">
       <ErrorText message={state?.error} />
+      {replace ? (
+        <p className="text-sm leading-relaxed text-slate-500">Mengganti foto tidak mengubah tanggal diterima.</p>
+      ) : null}
       <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center hover:border-steel hover:bg-steel-tint">
         <Camera className="h-6 w-6 text-steel" />
         <span className="mt-2 text-sm font-semibold text-slate-800">{replace ? "Ganti foto bukti" : "Ambil atau pilih foto"}</span>

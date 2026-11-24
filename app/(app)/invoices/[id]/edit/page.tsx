@@ -11,12 +11,17 @@ export default async function EditInvoicePage({ params }: { params: { id: string
   const current = await requirePermission("canManageInvoice");
   const invoice = await prisma.invoice.findFirst({
     where: { id: params.id, tenantId: current.tenant.id },
-    include: { items: true, suratJalans: { include: { items: true } } },
+    include: { items: true, pembayarans: true, suratJalans: { include: { items: true } } },
   });
   if (!invoice) notFound();
 
   const locks = invoiceLocks(invoice);
   const shipped = shippedQtyByItem(invoice);
+  const missingPaymentRows =
+    invoice.metodePembayaran === "CREDIT" &&
+    Math.round(invoice.jumlahTerbayar) > 0 &&
+    invoice.pembayarans.length === 0;
+  const noteOnly = locks.catatanOnly || missingPaymentRows;
   const [customers, products] = await Promise.all([
     prisma.customer.findMany({ where: { tenantId: current.tenant.id }, orderBy: { namaPt: "asc" } }),
     prisma.product.findMany({ where: { tenantId: current.tenant.id }, orderBy: { namaProduk: "asc" } }),
@@ -28,11 +33,15 @@ export default async function EditInvoicePage({ params }: { params: { id: string
         showOnMobile
         title="Ubah Invoice"
         description={
-          locks.catatanOnly
-            ? "Invoice sudah lunas / barang sudah diterima. Hanya catatan yang bisa diubah."
-            : invoice.jumlahTerbayar > 0
-              ? "Sudah ada pembayaran. Metode tetap Tempo, dan total tidak boleh di bawah yang sudah masuk."
-              : invoice.noInvoice
+          missingPaymentRows && !locks.catatanOnly
+            ? "Jumlah terbayar tidak punya rincian pembayaran. Hanya catatan yang bisa diubah sampai data diperbaiki."
+            : locks.catatanOnly
+              ? "Invoice sudah lunas / barang sudah diterima. Hanya catatan yang bisa diubah."
+              : locks.isCash
+                ? "Invoice cash sudah dianggap lunas. Metode pembayaran tidak bisa diubah."
+                : locks.creditPaid
+                  ? "Sudah ada pembayaran. Metode tetap Tempo, dan total tidak boleh di bawah yang sudah masuk."
+                  : invoice.noInvoice
         }
       />
       <InvoiceForm
@@ -42,10 +51,17 @@ export default async function EditInvoicePage({ params }: { params: { id: string
         ppnPercentage={current.tenant.ppnPercentage}
         suggestedNumber={invoice.noInvoice}
         autoNumber={false}
-        numberLocked={locks.numberLocked}
-        itemsLocked={locks.itemsLocked}
-        paymentLocked={locks.paymentLocked}
-        catatanOnly={locks.catatanOnly}
+        numberLocked={locks.numberLocked || noteOnly}
+        itemsLocked={locks.itemsLocked || noteOnly}
+        paymentLocked={locks.paymentLocked || noteOnly}
+        paymentLockMessage={
+          missingPaymentRows && !locks.catatanOnly
+            ? "Jumlah terbayar tidak punya rincian pembayaran. Metode dan item dikunci sampai data diperbaiki."
+            : noteOnly
+              ? null
+              : locks.paymentLockMessage
+        }
+        catatanOnly={noteOnly}
         defaults={{
           noInvoice: invoice.noInvoice,
           noPo: invoice.noPo,

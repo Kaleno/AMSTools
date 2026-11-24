@@ -8,8 +8,10 @@ import { requirePermission } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
 import { calcInvoice } from "@/lib/invoice-calc";
+import { foreignInvoiceItemIds } from "@/lib/invoice-items";
 import { invoiceLocks, shippedQtyByItem } from "@/lib/invoice-lock";
-import { derivePaymentStatus } from "@/lib/payment";
+import { lockInvoiceRow } from "@/lib/invoice-row-lock";
+import { paymentSnapshot, sumPembayaran, type PaymentMetode } from "@/lib/payment";
 
 export type ActionState = { error: string | null };
 
@@ -26,8 +28,30 @@ function str(formData: FormData, key: string) {
 
 function parseLines(formData: FormData): LineInput[] {
   try {
-    const raw = JSON.parse(str(formData, "itemsJson") || "[]") as LineInput[];
-    return raw.filter((line) => line.productId && line.qty > 0);
+    const raw = JSON.parse(str(formData, "itemsJson") || "[]") as unknown;
+    if (!Array.isArray(raw)) return [];
+    const lines: LineInput[] = [];
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue;
+      const row = entry as Record<string, unknown>;
+      const productId = typeof row.productId === "string" ? row.productId : "";
+      const qty = Number(row.qty);
+      if (!productId || !(qty > 0)) continue;
+      let id: string | undefined;
+      if (typeof row.id === "string") {
+        const trimmed = row.id.trim();
+        if (trimmed) id = trimmed;
+      } else if (row.id != null && row.id !== "") {
+        id = `__invalid__:${String(row.id)}`;
+      }
+      lines.push({
+        id,
+        productId,
+        qty,
+        hargaSatuan: Number(row.hargaSatuan),
+      });
+    }
+    return lines;
   } catch {
     return [];
   }
@@ -43,9 +67,18 @@ async function loadInvoice(tenantId: string, id: string) {
     where: { id, tenantId },
     include: {
       items: true,
+      pembayarans: true,
       suratJalans: { include: { items: true } },
     },
   });
+}
+
+function missingPaymentRows(invoice: { metodePembayaran: string; jumlahTerbayar: number; pembayarans: { id: string }[] }) {
+  return (
+    invoice.metodePembayaran === "CREDIT" &&
+    Math.round(invoice.jumlahTerbayar) > 0 &&
+    invoice.pembayarans.length === 0
+  );
 }
 
 async function buildTotals(tenantId: string, lines: LineInput[], formData: FormData) {
@@ -90,27 +123,49 @@ async function buildTotals(tenantId: string, lines: LineInput[], formData: FormD
   return { resolved, useDiskon, usePpn, diskonPersen, diskonNominal, ppnRate, totals };
 }
 
-function paymentFields(formData: FormData) {
-  const metode = str(formData, "metodePembayaran") === "CREDIT" ? "CREDIT" : "CASH";
-  const due = str(formData, "tanggalJatuhTempo");
+function requestedMetode(formData: FormData): PaymentMetode {
+  return str(formData, "metodePembayaran") === "CREDIT" ? "CREDIT" : "CASH";
+}
+
+function paymentFields(formData: FormData, grandTotal: number, actorId: string) {
+  const metode = requestedMetode(formData);
+  const now = new Date();
   if (metode === "CREDIT") {
+    const due = str(formData, "tanggalJatuhTempo");
     if (!due) {
       throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
     }
+    const snapshot = paymentSnapshot({
+      metode: "CREDIT",
+      grandTotal,
+      paidFromPayments: 0,
+      previousTanggalLunas: null,
+      previousLunasById: null,
+      actorId,
+      now,
+    });
     return {
       metodePembayaran: "CREDIT" as const,
-      statusPembayaran: "BELUM_LUNAS",
+      statusPembayaran: snapshot.statusPembayaran,
       tanggalJatuhTempo: parseWibDate(due),
-      tanggalLunas: null as Date | null,
+      tanggalLunas: snapshot.tanggalLunas,
+      lunasById: snapshot.lunasById,
+      jumlahTerbayar: snapshot.jumlahTerbayar,
     };
   }
   return {
     metodePembayaran: "CASH" as const,
-    statusPembayaran: "LUNAS",
+    statusPembayaran: "LUNAS" as const,
     tanggalJatuhTempo: null as Date | null,
-    tanggalLunas: new Date(),
+    tanggalLunas: now,
+    lunasById: null as string | null,
+    jumlahTerbayar: Math.round(grandTotal),
   };
 }
+
+const FOREIGN_ITEM = "Ada item yang bukan milik invoice ini. Muat ulang halaman, lalu simpan lagi.";
+const MISSING_PAYMENT_ROWS =
+  "Jumlah terbayar tidak punya rincian pembayaran. Data ini perlu diperbaiki dulu sebelum invoice diubah.";
 
 export async function createInvoice(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const current = await requirePermission("canManageInvoice");
@@ -131,7 +186,7 @@ export async function createInvoice(_prev: ActionState, formData: FormData): Pro
 
     const { resolved, useDiskon, usePpn, diskonPersen, diskonNominal, ppnRate, totals } =
       await buildTotals(current.tenant.id, lines, formData);
-    const payment = paymentFields(formData);
+    const payment = paymentFields(formData, totals.grandTotal, current.user.id);
 
     await prisma.invoice.create({
       data: {
@@ -150,7 +205,6 @@ export async function createInvoice(_prev: ActionState, formData: FormData): Pro
         subtotal: totals.subtotal,
         ppnAmount: totals.ppnAmount,
         grandTotal: totals.grandTotal,
-        jumlahTerbayar: payment.metodePembayaran === "CASH" ? totals.grandTotal : 0,
         catatan: str(formData, "catatan") || null,
         createdById: current.user.id,
         items: {
@@ -173,6 +227,8 @@ export async function createInvoice(_prev: ActionState, formData: FormData): Pro
   }
 
   revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports/due-dates");
   redirect(`/invoices?notice=${encodeURIComponent("Invoice tersimpan.")}`);
 }
 
@@ -187,7 +243,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
   try {
     const catatan = str(formData, "catatan") || null;
 
-    if (locks.catatanOnly) {
+    if (locks.catatanOnly || missingPaymentRows(invoice)) {
       await prisma.invoice.update({
         where: { id: invoice.id },
         data: { catatan, updatedById: current.user.id },
@@ -209,50 +265,82 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
     });
     if (!customer) return { error: "Customer tidak ditemukan." };
 
-    const shipped = shippedQtyByItem(invoice);
-    for (const existing of invoice.items) {
-      const minQty = shipped.get(existing.id) ?? 0;
-      if (minQty <= 0) continue;
-      const incoming = lines.find((line) => line.id === existing.id);
-      if (!incoming) {
-        return { error: `Item "${existing.namaProduk}" sudah masuk Surat Jalan, tidak boleh dihapus.` };
-      }
-      if (incoming.qty < minQty) {
-        return { error: `Qty "${existing.namaProduk}" tidak boleh di bawah yang sudah dikirim (${minQty}).` };
-      }
-    }
-
     const { resolved, useDiskon, usePpn, diskonPersen, diskonNominal, ppnRate, totals } =
       await buildTotals(current.tenant.id, lines, formData);
-    const base = locks.paymentLocked
-      ? {
-          metodePembayaran: invoice.metodePembayaran,
-          tanggalJatuhTempo: invoice.tanggalJatuhTempo,
-          tanggalLunas: invoice.tanggalLunas,
-          lunasById: invoice.lunasById,
-        }
-      : {
-          ...paymentFields(formData),
-          lunasById: null as string | null,
-        };
-
-    if (base.metodePembayaran === "CREDIT" && Math.round(totals.grandTotal) < Math.round(invoice.jumlahTerbayar)) {
-      throw new Error("Total tagihan tidak boleh lebih kecil dari yang sudah dibayar.");
-    }
-
-    let tanggalJatuhTempo = base.tanggalJatuhTempo;
-    if (base.metodePembayaran === "CREDIT") {
-      const due = str(formData, "tanggalJatuhTempo");
-      if (!due) throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
-      tanggalJatuhTempo = parseWibDate(due);
-    }
-
-    const jumlahTerbayar = base.metodePembayaran === "CASH" ? totals.grandTotal : Math.round(invoice.jumlahTerbayar);
-    const statusPembayaran = base.metodePembayaran === "CASH" ? "LUNAS" : derivePaymentStatus(totals.grandTotal, jumlahTerbayar);
-    const tanggalLunas = statusPembayaran === "LUNAS" ? base.tanggalLunas ?? new Date() : null;
-    const lunasById = statusPembayaran === "LUNAS" ? base.lunasById ?? current.user.id : null;
+    const requested = requestedMetode(formData);
 
     await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
+      if (!locked) throw new Error("Invoice tidak ditemukan.");
+
+      const fresh = await tx.invoice.findFirst({
+        where: { id: invoice.id, tenantId: current.tenant.id },
+        include: { items: true, pembayarans: true, suratJalans: { include: { items: true } } },
+      });
+      if (!fresh) throw new Error("Invoice tidak ditemukan.");
+
+      const freshLocks = invoiceLocks(fresh);
+      if (freshLocks.isVoid) throw new Error("Invoice batal tidak bisa diubah.");
+      if (freshLocks.catatanOnly || missingPaymentRows(fresh)) {
+        throw new Error(
+          missingPaymentRows(fresh)
+            ? MISSING_PAYMENT_ROWS
+            : "Invoice sudah lunas / barang sudah diterima. Hanya catatan yang bisa diubah. Muat ulang halaman.",
+        );
+      }
+
+      if (foreignInvoiceItemIds(resolved, new Set(fresh.items.map((item) => item.id))).length > 0) {
+        throw new Error(FOREIGN_ITEM);
+      }
+
+      const shipped = shippedQtyByItem(fresh);
+      for (const existing of fresh.items) {
+        const minQty = shipped.get(existing.id) ?? 0;
+        if (minQty <= 0) continue;
+        const incoming = resolved.find((line) => line.id === existing.id);
+        if (!incoming) {
+          throw new Error(`Item "${existing.namaProduk}" sudah masuk Surat Jalan, tidak boleh dihapus.`);
+        }
+        if (incoming.qty < minQty) {
+          throw new Error(`Qty "${existing.namaProduk}" tidak boleh di bawah yang sudah dikirim (${minQty}).`);
+        }
+      }
+
+      const paidSum = sumPembayaran(fresh.pembayarans);
+      let metode: PaymentMetode;
+      if (fresh.metodePembayaran === "CASH") {
+        metode = "CASH";
+      } else if (paidSum > 0 || freshLocks.paymentLocked) {
+        if (requested === "CASH") {
+          throw new Error("Sudah ada pembayaran. Metode tetap Tempo.");
+        }
+        metode = "CREDIT";
+      } else {
+        metode = requested;
+      }
+
+      if (metode === "CREDIT" && Math.round(totals.grandTotal) < paidSum) {
+        throw new Error("Total tagihan tidak boleh lebih kecil dari yang sudah dibayar.");
+      }
+
+      let tanggalJatuhTempo: Date | null = null;
+      if (metode === "CREDIT") {
+        const due = str(formData, "tanggalJatuhTempo");
+        if (!due) throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
+        tanggalJatuhTempo = parseWibDate(due);
+      }
+
+      const snapshot = paymentSnapshot({
+        metode,
+        grandTotal: totals.grandTotal,
+        paidFromPayments: paidSum,
+        previousTanggalLunas: fresh.tanggalLunas,
+        previousLunasById: fresh.lunasById,
+        actorId: current.user.id,
+        now: new Date(),
+      });
+      const lunasById = metode === "CASH" ? fresh.lunasById : snapshot.lunasById;
+
       await tx.invoice.update({
         where: { id: invoice.id },
         data: {
@@ -260,12 +348,12 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
           noPo: str(formData, "noPo") || null,
           tanggalInvoice: parseWibDate(tanggal),
           customerId,
-          metodePembayaran: base.metodePembayaran,
-          statusPembayaran,
+          metodePembayaran: metode,
+          statusPembayaran: snapshot.statusPembayaran,
           tanggalJatuhTempo,
-          tanggalLunas,
+          tanggalLunas: snapshot.tanggalLunas,
           lunasById,
-          jumlahTerbayar,
+          jumlahTerbayar: snapshot.jumlahTerbayar,
           usePpn,
           ppnRateApplied: ppnRate,
           useDiskon,
@@ -280,7 +368,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
         },
       });
 
-      const keepIds = resolved.map((line) => line.id).filter(Boolean) as string[];
+      const keepIds = resolved.map((line) => line.id).filter((id): id is string => Boolean(id));
       await tx.invoiceItem.deleteMany({
         where: {
           invoiceId: invoice.id,
@@ -290,8 +378,8 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
 
       for (const line of resolved) {
         if (line.id) {
-          await tx.invoiceItem.update({
-            where: { id: line.id },
+          const updated = await tx.invoiceItem.updateMany({
+            where: { id: line.id, invoiceId: invoice.id },
             data: {
               productId: line.productId,
               namaProduk: line.namaProduk,
@@ -301,6 +389,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
               subtotal: line.subtotal,
             },
           });
+          if (updated.count !== 1) throw new Error(FOREIGN_ITEM);
         } else {
           await tx.invoiceItem.create({
             data: {
@@ -327,68 +416,142 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
   }
 
   revalidatePath("/invoices");
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/reports/due-dates");
   redirect(`/invoices/${invoiceId}?notice=${encodeURIComponent("Invoice diperbarui.")}`);
 }
 
-export async function voidInvoice(invoiceId: string) {
+export async function voidInvoice(invoiceId: string): Promise<ActionState> {
   const current = await requirePermission("canManageInvoice");
-  const invoice = await loadInvoice(current.tenant.id, invoiceId);
-  if (!invoice) return;
-  const locks = invoiceLocks(invoice);
-  if (!locks.canVoid) return;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, invoiceId, current.tenant.id);
+      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      const fresh = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId: current.tenant.id },
+        include: { suratJalans: true },
+      });
+      if (!fresh) throw new Error("Invoice tidak ditemukan.");
+      const locks = invoiceLocks(fresh);
+      if (!locks.canVoid) {
+        throw new Error(locks.voidBlockMessage ?? "Invoice ini tidak bisa dibatalkan.");
+      }
+      await tx.invoice.update({
+        where: { id: fresh.id },
+        data: {
+          statusDokumen: "VOID",
+          updatedById: current.user.id,
+        },
+      });
+    });
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    return { error: error instanceof Error ? error.message : "Gagal membatalkan invoice." };
+  }
 
-  await prisma.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      statusDokumen: "VOID",
-      updatedById: current.user.id,
-    },
-  });
   revalidatePath("/invoices");
-  revalidatePath(`/invoices/${invoice.id}`);
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/surat-jalan");
+  revalidatePath("/reports/due-dates");
+  return { error: null };
 }
 
 export async function recordPayment(invoiceId: string, formData: FormData): Promise<ActionState> {
   const current = await requirePermission("canManageInvoice");
   const invoice = await loadInvoice(current.tenant.id, invoiceId);
   if (!invoice) return { error: "Invoice tidak ditemukan." };
-  const locks = invoiceLocks(invoice);
-  if (!locks.canRecordPayment) return { error: "Pembayaran tidak bisa dicatat untuk invoice ini." };
 
   const amount = Math.round(Number(str(formData, "jumlah").replace(/\D/g, "") || "0"));
   const tanggal = str(formData, "tanggal");
   const catatan = str(formData, "catatan") || null;
-  const sisa = Math.round(invoice.grandTotal) - Math.round(invoice.jumlahTerbayar);
-
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return { error: "Tanggal pembayaran tidak valid." };
   if (amount < 1) return { error: "Jumlah pembayaran wajib diisi." };
-  if (amount > sisa) return { error: "Jumlah melebihi sisa tagihan." };
-
-  const paid = Math.round(invoice.jumlahTerbayar) + amount;
-  const status = derivePaymentStatus(invoice.grandTotal, paid);
   const payDate = parseWibDate(tanggal);
 
-  await prisma.$transaction([
-    prisma.pembayaran.create({
-      data: {
-        invoiceId: invoice.id,
-        jumlah: amount,
-        tanggal: payDate,
-        catatan,
-        createdById: current.user.id,
-      },
-    }),
-    prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        jumlahTerbayar: paid,
-        statusPembayaran: status,
-        tanggalLunas: status === "LUNAS" ? payDate : null,
-        lunasById: status === "LUNAS" ? current.user.id : null,
-        updatedById: current.user.id,
-      },
-    }),
-  ]);
+  try {
+    const outcome = await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
+      if (!locked) return { error: "Invoice tidak ditemukan." };
+      const fresh = await tx.invoice.findFirst({
+        where: { id: invoice.id, tenantId: current.tenant.id },
+        include: { pembayarans: true },
+      });
+      if (!fresh) return { error: "Invoice tidak ditemukan." };
+      if (fresh.statusDokumen === "VOID") return { error: "Invoice batal tidak bisa dibayar." };
+      if (fresh.metodePembayaran !== "CREDIT") return { error: "Pembayaran hanya dicatat untuk invoice tempo." };
+      if (missingPaymentRows(fresh)) {
+        return { error: "Jumlah terbayar tidak punya rincian pembayaran. Perbaiki data dulu sebelum mencatat pembayaran baru." };
+      }
+
+      const already = sumPembayaran(fresh.pembayarans);
+      const total = Math.round(fresh.grandTotal);
+      if (already >= total) {
+        const aligned =
+          Math.round(fresh.jumlahTerbayar) === already && fresh.statusPembayaran === "LUNAS";
+        if (!aligned) {
+          const lastPaidAt = fresh.pembayarans.reduce<Date | null>(
+            (latest, row) => (!latest || row.tanggal > latest ? row.tanggal : latest),
+            null,
+          );
+          const snapshot = paymentSnapshot({
+            metode: "CREDIT",
+            grandTotal: fresh.grandTotal,
+            paidFromPayments: already,
+            previousTanggalLunas: fresh.tanggalLunas,
+            previousLunasById: fresh.lunasById,
+            actorId: current.user.id,
+            now: lastPaidAt ?? payDate,
+            paymentDate: fresh.tanggalLunas ?? lastPaidAt ?? payDate,
+          });
+          await tx.invoice.update({
+            where: { id: fresh.id },
+            data: { ...snapshot, updatedById: current.user.id },
+          });
+        }
+        return { error: "Tagihan ini sudah lunas." };
+      }
+
+      const sisa = total - already;
+      if (amount > sisa) return { error: "Jumlah melebihi sisa tagihan." };
+
+      await tx.pembayaran.create({
+        data: {
+          invoiceId: fresh.id,
+          jumlah: amount,
+          tanggal: payDate,
+          catatan,
+          createdById: current.user.id,
+        },
+      });
+      const snapshot = paymentSnapshot({
+        metode: "CREDIT",
+        grandTotal: fresh.grandTotal,
+        paidFromPayments: already + amount,
+        previousTanggalLunas: fresh.tanggalLunas,
+        previousLunasById: fresh.lunasById,
+        actorId: current.user.id,
+        now: payDate,
+        paymentDate: payDate,
+      });
+      await tx.invoice.update({
+        where: { id: fresh.id },
+        data: { ...snapshot, updatedById: current.user.id },
+      });
+      return { error: null as string | null };
+    });
+    if (outcome.error) {
+      revalidatePath("/invoices");
+      revalidatePath(`/invoices/${invoice.id}`);
+      revalidatePath("/dashboard");
+      revalidatePath("/reports/due-dates");
+      return outcome;
+    }
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    return { error: error instanceof Error ? error.message : "Gagal mencatat pembayaran." };
+  }
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${invoice.id}`);

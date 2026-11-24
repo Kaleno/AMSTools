@@ -6,7 +6,7 @@ import { remainingItemCount } from "@/lib/shipping";
 import { FilterTabs } from "@/components/filter-tabs";
 import { ClickableRow } from "@/components/clickable-row";
 import { EmptyState, ListSummary, PageHeader, TableWrap, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
-import { ShipBadge } from "@/app/(app)/invoices/invoice-badges";
+import { DocBadge, ShipBadge } from "@/app/(app)/invoices/invoice-badges";
 
 export default async function SuratJalanListPage({
   searchParams,
@@ -19,7 +19,7 @@ export default async function SuratJalanListPage({
   const rows = await prisma.suratJalan.findMany({
     where: {
       tenantId: current.tenant.id,
-      ...(status === "dikirim" ? { statusPengiriman: "DIKIRIM" } : {}),
+      ...(status === "dikirim" ? { statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } } : {}),
       ...(status === "diterima" ? { statusPengiriman: "DITERIMA" } : {}),
     },
     orderBy: { tanggalSuratJalan: "desc" },
@@ -66,7 +66,10 @@ export default async function SuratJalanListPage({
                     </p>
                     <p className="mt-1 text-xs text-slate-500">{invoiceRemainLabel(sj.invoice)}</p>
                   </div>
-                  <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {sj.invoice.statusDokumen === "VOID" ? <DocBadge status="VOID" /> : null}
+                    <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                  </div>
                 </div>
               </Link>
             ))}
@@ -96,7 +99,10 @@ export default async function SuratJalanListPage({
                       <td className={tdClass}>{sj.invoice.customer.namaPt}</td>
                       <td className={tdClass}>{formatWibLong(sj.tanggalSuratJalan)}</td>
                       <td className={tdClass}>
-                        <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                        <div className="flex flex-wrap gap-1">
+                          {sj.invoice.statusDokumen === "VOID" ? <DocBadge status="VOID" /> : null}
+                          <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                        </div>
                       </td>
                       <td className={tdClass}>
                         <div className="flex flex-col gap-1">

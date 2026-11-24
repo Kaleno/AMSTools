@@ -143,6 +143,7 @@ export function RecordPaymentButton({
                     formData.set("tanggal", tanggal);
                     formData.set("catatan", catatan);
                     const result = await recordPayment(id, formData);
+                    router.refresh();
                     if (result?.error) {
                       setError(result.error);
                       return;

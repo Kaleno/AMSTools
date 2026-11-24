@@ -52,6 +52,7 @@ export function InvoiceForm({
   numberLocked,
   itemsLocked,
   paymentLocked,
+  paymentLockMessage,
   catatanOnly,
   autoNumber = true,
 }: {
@@ -65,6 +66,7 @@ export function InvoiceForm({
   numberLocked?: boolean;
   itemsLocked?: boolean;
   paymentLocked?: boolean;
+  paymentLockMessage?: string | null;
   catatanOnly?: boolean;
   autoNumber?: boolean;
 }) {
@@ -127,6 +129,14 @@ export function InvoiceForm({
   }
 
   const readOnly = Boolean(catatanOnly || itemsLocked);
+  const methodLocked = Boolean(paymentLocked || readOnly);
+  const requestedDiskon = !useDiskon
+    ? 0
+    : diskonMode === "persen"
+      ? Math.round(totals.subtotal * (Number(diskonPersen || "0") / 100))
+      : Math.round(Number(diskonNominal || "0") || 0);
+  const discountCapped = useDiskon && totals.subtotal > 0 && requestedDiskon > totals.subtotal;
+  const creditZero = metode === "CREDIT" && totals.grandTotal === 0;
 
   return (
     <form action={formAction} className="space-y-4 pb-32 lg:space-y-6 lg:pb-0">
@@ -168,14 +178,15 @@ export function InvoiceForm({
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          {paymentLocked || readOnly ? <input type="hidden" name="metodePembayaran" value={metode} /> : null}
+          {methodLocked ? <input type="hidden" name="metodePembayaran" value={metode} /> : null}
           <Field label="Pembayaran">
             <select
-              name="metodePembayaran"
+              name={methodLocked ? undefined : "metodePembayaran"}
               value={metode}
               onChange={(e) => setMetode(e.target.value as "CASH" | "CREDIT")}
               className={inputClass}
-              disabled={paymentLocked || readOnly}
+              disabled={methodLocked}
+              aria-describedby={paymentLockMessage ? "payment-lock-note" : undefined}
             >
               <option value="CASH">Cash</option>
               <option value="CREDIT">Tempo</option>
@@ -194,6 +205,16 @@ export function InvoiceForm({
             </Field>
           ) : null}
         </div>
+        {paymentLockMessage ? (
+          <p id="payment-lock-note" className="text-sm leading-relaxed text-slate-500">
+            {paymentLockMessage}
+          </p>
+        ) : null}
+        {creditZero ? (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-800">
+            Total Rp0. Invoice tempo ini tersimpan sebagai lunas dan tidak masuk piutang.
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-4 panel p-4 lg:p-6">
@@ -214,7 +235,55 @@ export function InvoiceForm({
             </button>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <div className="space-y-3 md:hidden">
+          {lines.map((line) => (
+            <div key={line.key} className="rounded-lg border border-slate-200 p-3">
+              <ProductPicker
+                products={products}
+                value={line.productId}
+                disabled={readOnly || line.locked}
+                onChange={(productId) => onProductChange(line.key, productId)}
+              />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Qty</span>
+                  <input
+                    type="number"
+                    min={line.minQty || 1}
+                    step="1"
+                    value={line.qty}
+                    onChange={(e) => setLine(line.key, { qty: Number(e.target.value) })}
+                    className={inputClass}
+                    readOnly={readOnly}
+                  />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Harga / pcs</span>
+                  <MoneyField
+                    value={line.hargaSatuan}
+                    readOnly={readOnly}
+                    onChange={(hargaSatuan) => setLine(line.key, { hargaSatuan })}
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="min-w-0 text-sm text-slate-500">
+                  {line.satuan || "—"} · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(line.qty * line.hargaSatuan)}</span>
+                </p>
+                {readOnly || line.locked ? null : (
+                  <button
+                    type="button"
+                    className="shrink-0 px-2 py-2 text-sm font-medium text-rose-600"
+                    onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
             <thead className="text-slate-500">
               <tr>
@@ -307,6 +376,11 @@ export function InvoiceForm({
                   <input name="diskonNominal" type="number" min={0} step="1" value={diskonNominal} onChange={(e) => setDiskonNominal(e.target.value)} className={inputClass} readOnly={readOnly} />
                 </Field>
               )}
+              {discountCapped ? (
+                <p className="text-sm leading-relaxed text-amber-800 sm:col-span-2">
+                  Diskon lebih besar dari subtotal, jadi dipotong sampai habis.
+                </p>
+              ) : null}
             </div>
           ) : null}
           <label className="flex items-center gap-2 text-sm">
@@ -338,15 +412,21 @@ export function InvoiceForm({
             <span>Total</span>
             <span className="tabular-nums">{formatRupiah(totals.grandTotal)}</span>
           </div>
+          {creditZero ? (
+            <p className="text-xs leading-relaxed text-slate-500">Tempo Rp0 dianggap lunas, tidak masuk piutang.</p>
+          ) : null}
         </div>
       </section>
 
       <div className="above-tabbar fixed inset-x-0 z-30 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 shadow-lg lg:hidden">
-        <div>
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total tagihan</p>
           <p className="text-lg font-semibold tabular-nums text-slate-900">{formatRupiah(totals.grandTotal)}</p>
+          {creditZero ? <p className="text-[11px] leading-snug text-slate-500">Rp0 dianggap lunas</p> : null}
         </div>
-        <SubmitButton>{submitLabel}</SubmitButton>
+        <div className="shrink-0">
+          <SubmitButton>{submitLabel}</SubmitButton>
+        </div>
       </div>
 
       <div className="hidden gap-2 lg:flex">
