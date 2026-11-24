@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth-token";
+import { clearSessionOn } from "@/lib/session-cookie-clear";
 
 const PUBLIC_PATHS = ["/login", "/offline"];
 
@@ -56,10 +57,13 @@ export async function middleware(request: NextRequest) {
     const response = pathname.startsWith("/api/")
       ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       : NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
+    clearSessionOn(response);
     return response;
   }
 
+  // sessionVersion is checked in getCurrentUser against MySQL, then sent to
+  // /api/auth/clear-session. This middleware runs on the Edge runtime and does
+  // not open the database, so it only checks that the token is signed and current.
   return NextResponse.next();
 }
 
