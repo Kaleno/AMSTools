@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ownPasswordChangeMessage } from "./own-password";
+import { ownPasswordChangeMessage, settingsOwnPasswordMessage } from "./own-password";
 
 const ok = {
   currentPassword: "OldPass1!",
@@ -38,5 +38,31 @@ describe("own password change", () => {
       ownPasswordChangeMessage({ ...ok, newPassword: "password", confirmPassword: "password" }) ?? "",
       /huruf besar/,
     );
+  });
+});
+
+describe("owner settings password", () => {
+  it("leaves company settings alone when every password field is empty", () => {
+    assert.equal(
+      settingsOwnPasswordMessage({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+        currentMatches: false,
+      }),
+      null,
+    );
+  });
+
+  it("requires the current password once a new password is entered", () => {
+    assert.equal(
+      settingsOwnPasswordMessage({ ...ok, currentPassword: "", currentMatches: false }),
+      "Password saat ini wajib diisi.",
+    );
+    assert.equal(
+      settingsOwnPasswordMessage({ ...ok, currentMatches: false }),
+      "Password saat ini salah.",
+    );
+    assert.equal(settingsOwnPasswordMessage(ok), null);
   });
 });
