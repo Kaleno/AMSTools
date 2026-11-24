@@ -9,44 +9,58 @@ import { FilterTabs } from "@/components/filter-tabs";
 import { SearchField } from "@/components/search-field";
 import { ClickableRow } from "@/components/clickable-row";
 import { EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, moneyClass, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { DocBadge, PaymentBadge, ShipBadge } from "./invoice-badges";
 
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; kirim?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; kirim?: string; page?: string }>;
 }) {
   const current = await requirePermission("canManageInvoice");
   const query = await searchParams;
   const q = query.q?.trim() ?? "";
   const status = query.status ?? "aktif";
   const kirim = query.kirim ?? "semua";
+  const where = {
+    tenantId: current.tenant.id,
+    ...(status === "aktif" ? { statusDokumen: "AKTIF" } : {}),
+    ...(status === "void" ? { statusDokumen: "VOID" } : {}),
+    ...(status === "belum" ? { statusDokumen: "AKTIF", statusPembayaran: { in: ["BELUM_LUNAS", "SEBAGIAN"] } } : {}),
+    ...(status === "lunas" ? { statusDokumen: "AKTIF", statusPembayaran: "LUNAS" } : {}),
+    ...(kirim === "belum" ? { statusPengiriman: "BELUM_DIKIRIM" } : {}),
+    ...(kirim === "sebagian" ? { statusPengiriman: "SEBAGIAN" } : {}),
+    ...(kirim === "terkirim" ? { statusPengiriman: "TERKIRIM" } : {}),
+    ...(q
+      ? {
+          OR: [
+            { noInvoice: { contains: q } },
+            { customer: { namaPt: { contains: q } } },
+            { noPo: { contains: q } },
+          ],
+        }
+      : {}),
+  };
 
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      tenantId: current.tenant.id,
-      ...(status === "aktif" ? { statusDokumen: "AKTIF" } : {}),
-      ...(status === "void" ? { statusDokumen: "VOID" } : {}),
-      ...(status === "belum" ? { statusDokumen: "AKTIF", statusPembayaran: { in: ["BELUM_LUNAS", "SEBAGIAN"] } } : {}),
-      ...(status === "lunas" ? { statusDokumen: "AKTIF", statusPembayaran: "LUNAS" } : {}),
-      ...(kirim === "belum" ? { statusPengiriman: "BELUM_DIKIRIM" } : {}),
-      ...(kirim === "sebagian" ? { statusPengiriman: "SEBAGIAN" } : {}),
-      ...(kirim === "terkirim" ? { statusPengiriman: "TERKIRIM" } : {}),
-      ...(q
-        ? {
-            OR: [
-              { noInvoice: { contains: q } },
-              { customer: { namaPt: { contains: q } } },
-              { noPo: { contains: q } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { tanggalInvoice: "desc" },
-    include: { customer: true },
+  const summary = await prisma.invoice.aggregate({
+    where,
+    _sum: { grandTotal: true },
+    _count: { _all: true },
   });
-
-  const total = invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+  const totalCount = summary._count._all;
+  const total = summary._sum.grandTotal ?? 0;
+  const paging = pageWindow(query.page, totalCount);
+  const invoices =
+    totalCount === 0
+      ? []
+      : await prisma.invoice.findMany({
+          where,
+          orderBy: [{ tanggalInvoice: "desc" }, { id: "desc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: { customer: true },
+        });
 
   return (
     <div>
@@ -102,7 +116,7 @@ export default async function InvoicesPage({
       ) : (
         <>
           <ListSummary>
-            {invoices.length} invoice · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
+            {totalCount} invoice · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
           </ListSummary>
           <div className="space-y-2 md:hidden">
             {invoices.map((invoice) => (
@@ -170,6 +184,7 @@ export default async function InvoicesPage({
               </table>
             </TableWrap>
           </div>
+          <ListPager pathname="/invoices" paging={paging} params={{ q, status, kirim }} />
         </>
       )}
     </div>

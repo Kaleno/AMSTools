@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
+import { withSearchQuery } from "@/lib/pagination";
 
 export function SearchField({ placeholder }: { placeholder: string }) {
   const params = useSearchParams();
@@ -18,11 +19,7 @@ export function SearchField({ placeholder }: { placeholder: string }) {
   useEffect(() => {
     if (value === initial) return;
     const timer = window.setTimeout(() => {
-      const next = new URLSearchParams(params.toString());
-      const trimmed = value.trim();
-      if (trimmed) next.set("q", trimmed);
-      else next.delete("q");
-      const query = next.toString();
+      const query = withSearchQuery(params.toString(), value);
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     }, 300);
     return () => window.clearTimeout(timer);

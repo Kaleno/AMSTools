@@ -1,5 +1,22 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { OPEN_PAYMENT_STATUSES } from "@/lib/payment";
+
+export function dueDateBucket(filter: string): "overdue" | "minggu" | "semua" {
+  if (filter === "overdue" || filter === "minggu") return filter;
+  return "semua";
+}
+
+/** Same buckets as dueInvoiceWhere. The receivable total query appends this fragment. */
+export function dueDateTempoSql(filter: string, todayStart: Date, weekEnd: Date) {
+  const bucket = dueDateBucket(filter);
+  if (bucket === "overdue") {
+    return Prisma.sql`AND \`tanggalJatuhTempo\` IS NOT NULL AND \`tanggalJatuhTempo\` < ${todayStart}`;
+  }
+  if (bucket === "minggu") {
+    return Prisma.sql`AND \`tanggalJatuhTempo\` >= ${todayStart} AND \`tanggalJatuhTempo\` <= ${weekEnd}`;
+  }
+  return Prisma.sql`AND \`tanggalJatuhTempo\` IS NOT NULL`;
+}
 
 export function dueInvoiceWhere(
   tenantId: string,
@@ -7,10 +24,11 @@ export function dueInvoiceWhere(
   todayStart: Date,
   weekEnd: Date,
 ): Prisma.InvoiceWhereInput {
+  const bucket = dueDateBucket(filter);
   const tanggalJatuhTempo =
-    filter === "overdue"
+    bucket === "overdue"
       ? { not: null, lt: todayStart }
-      : filter === "minggu"
+      : bucket === "minggu"
         ? { gte: todayStart, lte: weekEnd }
         : { not: null };
 

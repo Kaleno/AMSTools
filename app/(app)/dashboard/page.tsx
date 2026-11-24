@@ -5,6 +5,7 @@ import { hasPermission, requireUser } from "@/lib/current-user";
 import { getNavItems } from "@/lib/nav";
 import { formatRupiah } from "@/lib/format";
 import { OPEN_PAYMENT_STATUSES, sisaTagihan } from "@/lib/payment";
+import { queryReceivableTotals } from "@/lib/receivable-total";
 import { addWibDays, daysDiffWib, parseWibDate, wibDateString, wibMonthRange } from "@/lib/datetime";
 import { CallLink } from "@/components/call-link";
 import { PageHeader, PrimaryLink } from "@/components/ui";
@@ -134,10 +135,7 @@ export default async function DashboardPage() {
         tanggalLunas: { gte: start, lt: end },
       },
     }),
-    prisma.invoice.findMany({
-      where: { tenantId, statusDokumen: "AKTIF", statusPembayaran: { in: [...OPEN_PAYMENT_STATUSES] } },
-      select: { grandTotal: true, jumlahTerbayar: true },
-    }),
+    queryReceivableTotals(tenantId),
     prisma.suratJalan.count({
       where: { tenantId, statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } },
     }),
@@ -174,8 +172,6 @@ export default async function DashboardPage() {
       include: { customer: true },
     }),
   ]);
-
-  const piutangSisa = piutang.reduce((sum, row) => sum + sisaTagihan(row), 0);
 
   return (
     <div className="space-y-4 lg:space-y-8">
@@ -218,11 +214,11 @@ export default async function DashboardPage() {
         />
         <KpiCard
           label="Piutang aktif"
-          value={formatRupiah(piutangSisa)}
-          hint={`${piutang.length} invoice belum lunas`}
+          value={formatRupiah(piutang.sisa)}
+          hint={`${piutang.count} invoice belum lunas`}
           href="/reports/due-dates"
         />
-        <KpiCard label="Invoice terbuka" value={String(piutang.length)} hint="Belum lunas dan sebagian" href="/invoices?status=belum" />
+        <KpiCard label="Invoice terbuka" value={String(piutang.count)} hint="Belum lunas dan sebagian" href="/invoices?status=belum" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

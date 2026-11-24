@@ -3,14 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/current-user";
 import { ResetPasswordButton } from "@/components/reset-password-button";
 import { Badge, EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { ToggleAdminButton } from "./toggle-button";
 
-export default async function AdminsPage() {
+export default async function AdminsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const current = await requireRoles(["OWNER"]);
-  const admins = await prisma.user.findMany({
-    where: { tenantId: current.tenant!.id, role: "ADMIN" },
-    orderBy: { createdAt: "desc" },
-  });
+  const query = await searchParams;
+  const where = { tenantId: current.tenant!.id, role: "ADMIN" };
+  const totalCount = await prisma.user.count({ where });
+  const paging = pageWindow(query.page, totalCount);
+  const admins =
+    totalCount === 0
+      ? []
+      : await prisma.user.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: paging.skip,
+          take: paging.take,
+        });
 
   return (
     <div>
@@ -27,7 +42,7 @@ export default async function AdminsPage() {
         />
       ) : (
         <>
-          <ListSummary>{admins.length} akun admin</ListSummary>
+          <ListSummary>{totalCount} akun admin</ListSummary>
           <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
             {admins.map((admin) => (
               <div key={admin.id} className="px-4 py-3">
@@ -90,6 +105,7 @@ export default async function AdminsPage() {
             </table>
           </TableWrap>
           </div>
+          <ListPager pathname="/admins" paging={paging} />
         </>
       )}
     </div>

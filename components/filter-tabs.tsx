@@ -19,7 +19,8 @@ export function FilterTabs({
         const params = new URLSearchParams();
         if (keep) {
           for (const [key, kept] of Object.entries(keep)) {
-            if (kept) params.set(key, kept);
+            if (key === "page" || !kept) continue;
+            params.set(key, kept);
           }
         }
         params.set(param, option.value);

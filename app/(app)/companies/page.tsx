@@ -3,14 +3,28 @@ import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/current-user";
 import { ResetPasswordButton } from "@/components/reset-password-button";
 import { Badge, EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { ToggleStatusButton } from "./toggle-button";
 
-export default async function CompaniesPage() {
+export default async function CompaniesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireSuperAdmin();
-  const tenants = await prisma.tenant.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { users: { where: { role: "OWNER" }, take: 1 } },
-  });
+  const query = await searchParams;
+  const totalCount = await prisma.tenant.count();
+  const paging = pageWindow(query.page, totalCount);
+  const tenants =
+    totalCount === 0
+      ? []
+      : await prisma.tenant.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: { users: { where: { role: "OWNER" }, take: 1 } },
+        });
 
   return (
     <div>
@@ -27,7 +41,7 @@ export default async function CompaniesPage() {
         />
       ) : (
         <>
-          <ListSummary>{tenants.length} perusahaan</ListSummary>
+          <ListSummary>{totalCount} perusahaan</ListSummary>
           <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
             {tenants.map((tenant) => {
               const owner = tenant.users[0];
@@ -100,6 +114,7 @@ export default async function CompaniesPage() {
             </table>
           </TableWrap>
           </div>
+          <ListPager pathname="/companies" paging={paging} />
         </>
       )}
     </div>

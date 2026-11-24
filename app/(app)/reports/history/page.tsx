@@ -4,13 +4,16 @@ import { requirePermission } from "@/lib/current-user";
 import { formatWibLong, parseWibDate, toDateInputValue, wibDateString, wibMonthRange } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
 import { historyInvoiceWhere } from "@/lib/report-filters";
+import { sumGrandTotal } from "@/lib/list-totals";
+import { pageWindow } from "@/lib/pagination";
+import { ListPager } from "@/components/list-pager";
 import { EmptyState, PageHeader, TableWrap, inputClass, moneyClass, primaryButtonClass, secondaryButtonClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { PaymentBadge } from "../../invoices/invoice-badges";
 
 export default async function PurchaseHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customerId?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ customerId?: string; from?: string; to?: string; page?: string }>;
 }) {
   const current = await requirePermission("canViewReports");
   const query = await searchParams;
@@ -21,42 +24,53 @@ export default async function PurchaseHistoryPage({
 
   const rangeStart = parseWibDate(from);
   const rangeEnd = new Date(parseWibDate(to).getTime() + 24 * 60 * 60 * 1000);
+  const where = historyInvoiceWhere(current.tenant.id, rangeStart, rangeEnd, customerId);
 
-  const customers = await prisma.customer.findMany({
-    where: { tenantId: current.tenant.id },
-    orderBy: { namaPt: "asc" },
-  });
+  const [customers, groups] = await Promise.all([
+    prisma.customer.findMany({
+      where: { tenantId: current.tenant.id },
+      orderBy: { namaPt: "asc" },
+    }),
+    prisma.invoice.groupBy({
+      by: ["customerId"],
+      where,
+      _count: { _all: true },
+      _sum: { grandTotal: true },
+      _max: { tanggalInvoice: true },
+    }),
+  ]);
 
-  const invoices = await prisma.invoice.findMany({
-    where: historyInvoiceWhere(current.tenant.id, rangeStart, rangeEnd, customerId),
-    orderBy: { tanggalInvoice: "desc" },
-    include: { customer: true, items: true },
-  });
-
-  const byCustomer = new Map<string, { namaPt: string; count: number; total: number; last: Date }>();
-  for (const invoice of invoices) {
-    const row = byCustomer.get(invoice.customerId) ?? {
-      namaPt: invoice.customer.namaPt,
-      count: 0,
-      total: 0,
-      last: invoice.tanggalInvoice,
-    };
-    row.count += 1;
-    row.total += invoice.grandTotal;
-    if (invoice.tanggalInvoice > row.last) row.last = invoice.tanggalInvoice;
-    byCustomer.set(invoice.customerId, row);
-  }
-
-  const summaries = Array.from(byCustomer.entries()).sort((a, b) => b[1].total - a[1].total);
+  const names = new Map(customers.map((customer) => [customer.id, customer.namaPt]));
+  const summaries = groups
+    .map((group) => ({
+      customerId: group.customerId,
+      namaPt: names.get(group.customerId) ?? "—",
+      count: group._count._all,
+      total: group._sum.grandTotal ?? 0,
+      last: group._max.tanggalInvoice ?? new Date(0),
+    }))
+    .sort((a, b) => b.total - a.total || a.namaPt.localeCompare(b.namaPt, "id") || a.customerId.localeCompare(b.customerId));
   const selected = customers.find((customer) => customer.id === customerId);
-  const total = summaries.reduce((sum, [, row]) => sum + row.total, 0);
+  const total = sumGrandTotal(summaries.map((row) => ({ grandTotal: row.total })));
+  const summaryPaging = pageWindow(customerId ? "1" : query.page, summaries.length);
+  const summaryRows = customerId ? summaries : summaries.slice(summaryPaging.skip, summaryPaging.skip + summaryPaging.take);
+  const detailPaging = pageWindow(query.page, customerId ? summaries.reduce((sum, row) => sum + row.count, 0) : 0);
+  const invoices = customerId
+    ? await prisma.invoice.findMany({
+        where,
+        orderBy: [{ tanggalInvoice: "desc" }, { id: "desc" }],
+        skip: detailPaging.skip,
+        take: detailPaging.take,
+        include: { customer: true, items: true },
+      })
+    : [];
 
   return (
     <div>
       <PageHeader title="Riwayat pembelian" description="Ringkasan per customer dan harga historis invoice." />
 
-      <form method="get" className="panel mb-5 flex flex-wrap items-end gap-3 p-4">
-        <label className="block min-w-[16rem] flex-1">
+      <form method="get" className="panel mb-5 flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <label className="block w-full min-w-0 sm:min-w-[16rem] sm:flex-1">
           <span className="mb-1.5 block text-sm font-medium text-slate-700">Customer</span>
           <select name="customerId" defaultValue={customerId} className={inputClass}>
             <option value="">Semua customer</option>
@@ -67,20 +81,22 @@ export default async function PurchaseHistoryPage({
             ))}
           </select>
         </label>
-        <label className="block">
+        <label className="block w-full sm:w-auto">
           <span className="mb-1.5 block text-sm font-medium text-slate-700">Dari</span>
           <input type="date" name="from" defaultValue={from} className={inputClass} />
         </label>
-        <label className="block">
+        <label className="block w-full sm:w-auto">
           <span className="mb-1.5 block text-sm font-medium text-slate-700">Sampai</span>
           <input type="date" name="to" defaultValue={to} className={inputClass} />
         </label>
-        <button type="submit" className={primaryButtonClass}>
-          Tampilkan
-        </button>
-        <button type="submit" formAction="/reports/history/export" className={secondaryButtonClass}>
-          Export Excel
-        </button>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <button type="submit" className={`${primaryButtonClass} w-full sm:w-auto`}>
+            Tampilkan
+          </button>
+          <button type="submit" formAction="/reports/history/export" className={`${secondaryButtonClass} w-full sm:w-auto`}>
+            Export Excel
+          </button>
+        </div>
       </form>
 
       {summaries.length === 0 ? (
@@ -92,10 +108,10 @@ export default async function PurchaseHistoryPage({
               {summaries.length} customer · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
             </p>
             <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
-              {summaries.map(([id, row]) => (
+              {summaryRows.map((row) => (
                 <Link
-                  key={id}
-                  href={`/reports/history?customerId=${id}&from=${from}&to=${to}`}
+                  key={row.customerId}
+                  href={`/reports/history?customerId=${row.customerId}&from=${from}&to=${to}`}
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0">
@@ -120,11 +136,11 @@ export default async function PurchaseHistoryPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {summaries.map(([id, row]) => (
-                    <tr key={id} className={trClass}>
+                  {summaryRows.map((row) => (
+                    <tr key={row.customerId} className={trClass}>
                       <td className={tdClass}>
                         <Link
-                          href={`/reports/history?customerId=${id}&from=${from}&to=${to}`}
+                          href={`/reports/history?customerId=${row.customerId}&from=${from}&to=${to}`}
                           className="font-semibold text-steel hover:text-steel-dark"
                         >
                           {row.namaPt}
@@ -139,6 +155,9 @@ export default async function PurchaseHistoryPage({
               </table>
             </TableWrap>
             </div>
+            {customerId ? null : (
+              <ListPager pathname="/reports/history" paging={summaryPaging} params={{ from, to }} />
+            )}
           </div>
 
           {selected ? (
@@ -186,6 +205,7 @@ export default async function PurchaseHistoryPage({
                   </div>
                 ))}
               </div>
+              <ListPager pathname="/reports/history" paging={detailPaging} params={{ customerId, from, to }} />
             </section>
           ) : null}
         </div>

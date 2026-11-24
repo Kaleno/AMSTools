@@ -4,17 +4,20 @@ import { hasPermission, requirePermission } from "@/lib/current-user";
 import { addWibDays, daysDiffWib, formatWibLong, parseWibDate, wibDateString } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
 import { sisaTagihan } from "@/lib/payment";
-import { dueInvoiceWhere } from "@/lib/report-filters";
+import { dueDateTempoSql, dueInvoiceWhere } from "@/lib/report-filters";
+import { queryReceivableTotals } from "@/lib/receivable-total";
+import { pageWindow } from "@/lib/pagination";
 import { FilterTabs } from "@/components/filter-tabs";
 import { ClickableRow } from "@/components/clickable-row";
 import { CallLink } from "@/components/call-link";
+import { ListPager } from "@/components/list-pager";
 import { EmptyState, ListSummary, PageHeader, TableWrap, moneyClass, secondaryButtonClass, tableClass, tdClass, thClass, theadClass } from "@/components/ui";
 import { RecordPaymentButton } from "../../invoices/invoice-actions";
 
 export default async function DueDatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
   const current = await requirePermission("canViewReports");
   const query = await searchParams;
@@ -25,14 +28,19 @@ export default async function DueDatesPage({
   const weekEnd = addWibDays(todayStr, dueDays);
   const now = new Date();
   const canPay = hasPermission(current, "canManageInvoice");
-
-  const invoices = await prisma.invoice.findMany({
-    where: dueInvoiceWhere(current.tenant.id, filter, todayStart, weekEnd),
-    orderBy: { tanggalJatuhTempo: "asc" },
-    include: { customer: true, createdBy: true },
-  });
-
-  const total = invoices.reduce((sum, row) => sum + sisaTagihan(row), 0);
+  const where = dueInvoiceWhere(current.tenant.id, filter, todayStart, weekEnd);
+  const totals = await queryReceivableTotals(current.tenant.id, dueDateTempoSql(filter, todayStart, weekEnd));
+  const paging = pageWindow(query.page, totals.count);
+  const invoices =
+    totals.count === 0
+      ? []
+      : await prisma.invoice.findMany({
+          where,
+          orderBy: [{ tanggalJatuhTempo: "asc" }, { id: "asc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: { customer: true, createdBy: true },
+        });
   const today = wibDateString();
 
   return (
@@ -65,7 +73,7 @@ export default async function DueDatesPage({
       ) : (
         <>
           <ListSummary>
-            {invoices.length} invoice · sisa <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(total)}</span>
+            {totals.count} invoice · sisa <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(totals.sisa)}</span>
           </ListSummary>
           <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
             {invoices.map((invoice) => {
@@ -133,6 +141,7 @@ export default async function DueDatesPage({
               </table>
             </TableWrap>
           </div>
+          <ListPager pathname="/reports/due-dates" paging={paging} params={{ filter }} />
         </>
       )}
     </div>

@@ -3,15 +3,30 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { CallLink } from "@/components/call-link";
+import { ListPager } from "@/components/list-pager";
+import { pageWindow } from "@/lib/pagination";
 import { DeleteCustomerButton } from "./delete-button";
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const current = await requirePermission("canManageMasterData");
-  const customers = await prisma.customer.findMany({
-    where: { tenantId: current.tenant.id },
-    orderBy: { namaPt: "asc" },
-    include: { _count: { select: { invoices: true } } },
-  });
+  const query = await searchParams;
+  const where = { tenantId: current.tenant.id };
+  const totalCount = await prisma.customer.count({ where });
+  const paging = pageWindow(query.page, totalCount);
+  const customers =
+    totalCount === 0
+      ? []
+      : await prisma.customer.findMany({
+          where,
+          orderBy: [{ namaPt: "asc" }, { id: "asc" }],
+          skip: paging.skip,
+          take: paging.take,
+          include: { _count: { select: { invoices: true } } },
+        });
 
   return (
     <div>
@@ -28,7 +43,7 @@ export default async function CustomersPage() {
         />
       ) : (
         <>
-          <ListSummary>{customers.length} customer</ListSummary>
+          <ListSummary>{totalCount} customer</ListSummary>
           <div className="space-y-2 md:hidden">
             {customers.map((customer) => (
               <div key={customer.id} className="panel p-4">
@@ -84,6 +99,7 @@ export default async function CustomersPage() {
               </table>
             </TableWrap>
           </div>
+          <ListPager pathname="/customers" paging={paging} />
         </>
       )}
     </div>
