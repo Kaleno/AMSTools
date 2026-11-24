@@ -21,6 +21,7 @@ export default async function SuratJalanListPage({
       tenantId: current.tenant.id,
       ...(status === "dikirim" ? { statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } } : {}),
       ...(status === "diterima" ? { statusPengiriman: "DITERIMA" } : {}),
+      ...(status === "batal" ? { statusPengiriman: "BATAL" } : {}),
     },
     orderBy: { tanggalSuratJalan: "desc" },
     include: {
@@ -46,6 +47,7 @@ export default async function SuratJalanListPage({
             { value: "semua", label: "Semua" },
             { value: "dikirim", label: "Menunggu bukti" },
             { value: "diterima", label: "Diterima" },
+            { value: "batal", label: "Batal" },
           ]}
         />
       </div>
@@ -58,8 +60,8 @@ export default async function SuratJalanListPage({
             {rows.map((sj) => (
               <Link key={sj.id} href={`/surat-jalan/${sj.id}`} className="panel block p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">{sj.noSuratJalan}</p>
+                  <div className="min-w-0">
+                    <p className="break-all font-semibold text-slate-900">{sj.noSuratJalan}</p>
                     <p className="text-sm text-slate-600">{sj.invoice.customer.namaPt}</p>
                     <p className="mt-1 text-xs text-slate-500">
                       {sj.invoice.noInvoice} · {formatWibLong(sj.tanggalSuratJalan)}
@@ -68,7 +70,7 @@ export default async function SuratJalanListPage({
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {sj.invoice.statusDokumen === "VOID" ? <DocBadge status="VOID" /> : null}
-                    <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                    <StatusPill status={sj.statusPengiriman} />
                   </div>
                 </div>
               </Link>
@@ -101,7 +103,7 @@ export default async function SuratJalanListPage({
                       <td className={tdClass}>
                         <div className="flex flex-wrap gap-1">
                           {sj.invoice.statusDokumen === "VOID" ? <DocBadge status="VOID" /> : null}
-                          <StatusPill received={sj.statusPengiriman === "DITERIMA"} />
+                          <StatusPill status={sj.statusPengiriman} />
                         </div>
                       </td>
                       <td className={tdClass}>
@@ -128,12 +130,22 @@ function invoiceRemainLabel(invoice: Parameters<typeof remainingItemCount>[0]) {
   return `Invoice sisa ${sisa} item`;
 }
 
-function StatusPill({ received }: { received: boolean }) {
-  return received ? (
-    <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/15">
-      Diterima
-    </span>
-  ) : (
+function StatusPill({ status }: { status: string }) {
+  if (status === "BATAL") {
+    return (
+      <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/15">
+        Batal
+      </span>
+    );
+  }
+  if (status === "DITERIMA") {
+    return (
+      <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/15">
+        Diterima
+      </span>
+    );
+  }
+  return (
     <span className="inline-flex rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel-dark ring-1 ring-inset ring-steel/15">
       Dikirim
     </span>

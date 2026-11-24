@@ -3,10 +3,12 @@ import test from "node:test";
 import type { Prisma } from "@prisma/client";
 import { parseWibDate } from "./datetime";
 import { nextDocumentNumber } from "./document-number";
+import { suratJalanCancelBlock } from "./surat-jalan-cancel";
 import {
   computeStatusPengiriman,
   lockedSuratJalanCreateError,
   nextSuratJalanUrutan,
+  remainingByItem,
   type ShipLine,
 } from "./shipping";
 
@@ -16,10 +18,19 @@ type StoredNumber = {
   id: string;
   noSuratJalan: string;
   tanggalSuratJalan: Date;
+  statusPengiriman: string;
 };
 
-function stored(id: string, noSuratJalan: string, tanggal: string): StoredNumber {
-  return { id, noSuratJalan, tanggalSuratJalan: parseWibDate(tanggal) };
+function stored(id: string, noSuratJalan: string, tanggal: string, statusPengiriman = "DIKIRIM"): StoredNumber {
+  return { id, noSuratJalan, tanggalSuratJalan: parseWibDate(tanggal), statusPengiriman };
+}
+
+function matchesStatus(status: string, filter: string | { not?: string; in?: string[] } | undefined) {
+  if (!filter) return true;
+  if (typeof filter === "string") return status === filter;
+  if (filter.not) return status !== filter.not;
+  if (filter.in) return filter.in.includes(status);
+  return true;
 }
 
 function numberClient(rows: StoredNumber[]) {
@@ -30,12 +41,14 @@ function numberClient(rows: StoredNumber[]) {
           id?: { not: string };
           tanggalSuratJalan?: { gte: Date; lt: Date };
           noSuratJalan?: { startsWith: string };
+          statusPengiriman?: string | { not?: string; in?: string[] };
         };
       }) {
         const where = args.where;
         return rows
           .filter((row) => {
             if (where.id?.not && row.id === where.id.not) return false;
+            if (!matchesStatus(row.statusPengiriman, where.statusPengiriman)) return false;
             if (where.tanggalSuratJalan) {
               const { gte, lt } = where.tanggalSuratJalan;
               if (row.tanggalSuratJalan < gte || row.tanggalSuratJalan >= lt) return false;
@@ -157,4 +170,71 @@ test("next day restarts the surat jalan sequence", async () => {
     stored("sj-2", "AMS/CKR/2026/XI/2402", "2026-11-24"),
   ];
   assert.equal(await suggest("2026-11-25", rows), "AMS/CKR/2026/XI/2501");
+});
+
+test("a cancelled surat jalan number still advances the next suggestion", async () => {
+  assert.equal(
+    await suggest("2026-11-24", [stored("sj-batal", "AMS/CKR/2026/XI/2401", "2026-11-24", "BATAL")]),
+    "AMS/CKR/2026/XI/2402",
+  );
+});
+
+test("only the owner can cancel, and a received surat jalan cannot", () => {
+  assert.equal(
+    suratJalanCancelBlock({ role: "ADMIN", statusPengiriman: "DIKIRIM", alasan: "salah kirim" }),
+    "Hanya Owner yang bisa membatalkan Surat Jalan.",
+  );
+  assert.equal(
+    suratJalanCancelBlock({ role: "SUPER_ADMIN", statusPengiriman: "DIKIRIM", alasan: "salah kirim" }),
+    "Hanya Owner yang bisa membatalkan Surat Jalan.",
+  );
+  assert.equal(
+    suratJalanCancelBlock({ role: "OWNER", statusPengiriman: "DITERIMA", alasan: "salah kirim" }),
+    "Surat Jalan yang sudah diterima tidak bisa dibatalkan.",
+  );
+  assert.equal(
+    suratJalanCancelBlock({
+      role: "OWNER",
+      statusPengiriman: "DIKIRIM",
+      buktiTerimaUrl: "proofs/a.jpg",
+      alasan: "salah kirim",
+    }),
+    "Surat Jalan yang sudah diterima tidak bisa dibatalkan.",
+  );
+  assert.equal(
+    suratJalanCancelBlock({ role: "OWNER", statusPengiriman: "DIKIRIM", alasan: "   " }),
+    "Alasan pembatalan wajib diisi.",
+  );
+  assert.equal(suratJalanCancelBlock({ role: "OWNER", statusPengiriman: "DIKIRIM", alasan: "Salah barang" }), null);
+});
+
+test("cancelling a surat jalan returns qty to sisa and recalculates status", () => {
+  let current = openInvoice();
+  current = recordShipment(current, [{ invoiceItemId: "item-1", qty: 4 }]);
+  current = recordShipment(current, [{ invoiceItemId: "item-1", qty: 6 }]);
+  assert.equal(computeStatusPengiriman(current), "TERKIRIM");
+  assert.equal(remainingByItem(current)[0]?.remaining, 0);
+
+  const afterOne = {
+    ...current,
+    suratJalans: current.suratJalans.map((sj, index) => ({
+      ...sj,
+      statusPengiriman: index === 0 ? "BATAL" : "DIKIRIM",
+    })),
+  };
+  assert.equal(remainingByItem(afterOne)[0]?.remaining, 4);
+  assert.equal(computeStatusPengiriman(afterOne), "SEBAGIAN");
+  assert.equal(lockedSuratJalanCreateError(afterOne, [{ invoiceItemId: "item-1", qty: 4 }]), null);
+  assert.equal(
+    lockedSuratJalanCreateError(afterOne, [{ invoiceItemId: "item-1", qty: 5 }]),
+    'Qty "Kertas" melebihi sisa (4).',
+  );
+
+  const afterBoth = {
+    ...afterOne,
+    suratJalans: afterOne.suratJalans.map((sj) => ({ ...sj, statusPengiriman: "BATAL" })),
+  };
+  assert.equal(remainingByItem(afterBoth)[0]?.remaining, 10);
+  assert.equal(computeStatusPengiriman(afterBoth), "BELUM_DIKIRIM");
+  assert.equal(lockedSuratJalanCreateError(afterBoth, [{ invoiceItemId: "item-1", qty: 10 }]), null);
 });

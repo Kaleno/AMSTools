@@ -17,6 +17,7 @@ export default async function PrintSuratJalanPage({ params }: { params: { id: st
     },
   });
   if (!sj) notFound();
+  const batal = sj.statusPengiriman === "BATAL";
   const tenant = sj.tenant;
   const customer = sj.invoice.customer;
   const rows = padRows(sj.items, 8);
@@ -24,7 +25,12 @@ export default async function PrintSuratJalanPage({ params }: { params: { id: st
   return (
     <>
       <PrintToolbar backHref={`/surat-jalan/${sj.id}`} />
-      <article className="print-sheet border border-black bg-white p-6">
+      <article className="print-sheet relative border border-black bg-white p-6">
+        {batal ? (
+          <div className="sj-batal-stamp" aria-hidden="true">
+            BATAL
+          </div>
+        ) : null}
         <CompanyLetterhead tenant={tenant} className="mb-3 border-b border-black pb-3" />
 
         <div className="mb-3 flex justify-between gap-6">
@@ -33,6 +39,7 @@ export default async function PrintSuratJalanPage({ params }: { params: { id: st
             <p>No. Surat Jalan : {sj.noSuratJalan}</p>
             <p>Tanggal : {formatWibLong(sj.tanggalSuratJalan)}</p>
             <p>No. PO : {sj.noPo || "-"}</p>
+            {batal ? <p className="mt-1 font-bold">Status : BATAL</p> : null}
           </div>
           <div>
             <p>
@@ -69,6 +76,7 @@ export default async function PrintSuratJalanPage({ params }: { params: { id: st
           </tbody>
         </table>
 
+        {batal && sj.alasanBatal ? <p className="mt-3">Alasan batal : {sj.alasanBatal}</p> : null}
         {tenant.sjFooterNote ? <p className="mt-3">{tenant.sjFooterNote}</p> : null}
 
         <div className="mt-10 flex justify-between px-6">

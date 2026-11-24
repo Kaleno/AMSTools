@@ -4,10 +4,11 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/current-user";
+import { requirePermission, requireUser } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
 import { lockInvoiceRow } from "@/lib/invoice-row-lock";
+import { OWNER_ONLY_CANCEL, REASON_REQUIRED, suratJalanCancelBlock } from "@/lib/surat-jalan-cancel";
 import {
   computeStatusPengiriman,
   lockedSuratJalanCreateError,
@@ -154,6 +155,72 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
   }
 }
 
+export async function cancelSuratJalan(suratJalanId: string, formData: FormData): Promise<ActionState> {
+  const current = await requireUser();
+  const tenant = current.tenant;
+  if (current.user.role !== "OWNER" || !tenant) {
+    return { error: OWNER_ONLY_CANCEL };
+  }
+
+  const alasan = str(formData, "alasan");
+  if (!alasan) return { error: REASON_REQUIRED };
+
+  const existing = await prisma.suratJalan.findFirst({
+    where: { id: suratJalanId, tenantId: tenant.id },
+    select: { id: true, invoiceId: true },
+  });
+  if (!existing) return { error: "Surat Jalan tidak ditemukan." };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, existing.invoiceId, tenant.id);
+      if (!locked) throw new Error("Invoice tidak ditemukan.");
+
+      const fresh = await tx.suratJalan.findFirst({
+        where: { id: existing.id, tenantId: tenant.id },
+      });
+      if (!fresh) throw new Error("Surat Jalan tidak ditemukan.");
+
+      const blocked = suratJalanCancelBlock({
+        role: current.user.role,
+        statusPengiriman: fresh.statusPengiriman,
+        buktiTerimaUrl: fresh.buktiTerimaUrl,
+        alasan,
+      });
+      if (blocked) throw new Error(blocked);
+
+      await tx.suratJalan.update({
+        where: { id: fresh.id },
+        data: {
+          statusPengiriman: "BATAL",
+          alasanBatal: alasan,
+          batalAt: new Date(),
+          batalById: current.user.id,
+        },
+      });
+
+      const refreshed = await tx.invoice.findFirstOrThrow({
+        where: { id: fresh.invoiceId },
+        include: { items: true, suratJalans: { include: { items: true } } },
+      });
+      await tx.invoice.update({
+        where: { id: fresh.invoiceId },
+        data: { statusPengiriman: computeStatusPengiriman(refreshed) },
+      });
+    });
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    return { error: error instanceof Error ? error.message : "Gagal membatalkan Surat Jalan." };
+  }
+
+  revalidatePath(`/surat-jalan/${existing.id}`);
+  revalidatePath("/surat-jalan");
+  revalidatePath(`/invoices/${existing.invoiceId}`);
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+  return { error: null };
+}
+
 export async function uploadProof(suratJalanId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
   const current = await requirePermission("canManageSuratJalan");
   const sj = await prisma.suratJalan.findFirst({
@@ -161,6 +228,9 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
     include: { invoice: { select: { id: true, statusDokumen: true } } },
   });
   if (!sj) return { error: "Surat Jalan tidak ditemukan." };
+  if (sj.statusPengiriman === "BATAL") {
+    return { error: "Surat Jalan batal tidak bisa menerima bukti." };
+  }
   if (sj.invoice.statusDokumen === "VOID") {
     return { error: "Invoice sudah dibatalkan. Bukti terima tidak bisa diunggah." };
   }
@@ -172,15 +242,31 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
 
   try {
     const buktiTerimaUrl = await saveProofPhoto(current.tenant.id, sj.id, file);
-    await prisma.suratJalan.update({
-      where: { id: sj.id },
-      data: {
-        buktiTerimaUrl,
-        statusPengiriman: "DITERIMA",
-        ...(sj.tanggalDiterima ? {} : { tanggalDiterima: new Date() }),
-      },
+    await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, sj.invoice.id, current.tenant.id);
+      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      const fresh = await tx.suratJalan.findFirst({
+        where: { id: sj.id, tenantId: current.tenant.id },
+        include: { invoice: { select: { statusDokumen: true } } },
+      });
+      if (!fresh) throw new Error("Surat Jalan tidak ditemukan.");
+      if (fresh.statusPengiriman === "BATAL") {
+        throw new Error("Surat Jalan batal tidak bisa menerima bukti.");
+      }
+      if (fresh.invoice.statusDokumen === "VOID") {
+        throw new Error("Invoice sudah dibatalkan. Bukti terima tidak bisa diunggah.");
+      }
+      await tx.suratJalan.update({
+        where: { id: fresh.id },
+        data: {
+          buktiTerimaUrl,
+          statusPengiriman: "DITERIMA",
+          ...(fresh.tanggalDiterima ? {} : { tanggalDiterima: new Date() }),
+        },
+      });
     });
   } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
     return { error: error instanceof Error ? error.message : "Gagal unggah bukti." };
   }
 
