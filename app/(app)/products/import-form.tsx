@@ -18,8 +18,9 @@ export function ProductImportForm() {
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-800">Impor Excel</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs leading-relaxed text-slate-500">
             Kode yang sudah ada di-update. Baris tanpa kode dapat nomor otomatis. Hapus produk tetap di aplikasi.
+            Unggah .xlsx atau .csv. File Excel lama (.xls) tidak bisa dibaca.
           </p>
         </div>
         <form action={previewAction} className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
@@ -85,9 +86,9 @@ export function ProductImportForm() {
               </tbody>
             </table>
           </div>
-          {valid.length > 0 ? (
+          {valid.length > 0 && previewState.importToken ? (
             <form action={confirmAction}>
-              <input type="hidden" name="payload" value={JSON.stringify(valid)} />
+              <input type="hidden" name="importToken" value={previewState.importToken} />
               <div className="[&_button]:w-full sm:[&_button]:w-auto">
                 <SubmitButton>Simpan {valid.length} baris valid</SubmitButton>
               </div>

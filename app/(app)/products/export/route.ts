@@ -10,7 +10,7 @@ export async function GET() {
     orderBy: [{ kodeProduk: "asc" }, { namaProduk: "asc" }],
   });
 
-  const buffer = buildProductWorkbook(
+  const buffer = await buildProductWorkbook(
     products.map((product) => ({
       kodeProduk: product.kodeProduk ?? "",
       namaProduk: product.namaProduk,
