@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import { readInsideRoot, resolveMediaPath } from "@/lib/media-path";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
@@ -48,10 +49,9 @@ export async function saveProofPhoto(tenantId: string, suratJalanId: string, fil
 }
 
 export async function readUpload(relativePath: string) {
-  const normalized = path.normalize(relativePath).replace(/^(\.\.[/\\])+/, "");
-  const full = path.join(UPLOAD_ROOT, normalized);
-  if (!full.startsWith(UPLOAD_ROOT)) {
+  const resolved = resolveMediaPath(relativePath.split("/"), UPLOAD_ROOT);
+  if (!resolved.ok) {
     throw new Error("INVALID_PATH");
   }
-  return readFile(full);
+  return readInsideRoot(UPLOAD_ROOT, resolved.absolute);
 }
