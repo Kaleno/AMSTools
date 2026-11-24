@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
+import { lockInvoiceRow } from "@/lib/invoice-row-lock";
 import { computeStatusPengiriman, remainingByItem } from "@/lib/shipping";
 import { saveProofPhoto } from "@/lib/uploads";
 
@@ -70,6 +71,16 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
 
   try {
     const created = await prisma.$transaction(async (tx) => {
+      const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
+      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      const fresh = await tx.invoice.findFirst({
+        where: { id: invoice.id, tenantId: current.tenant.id },
+        select: { statusDokumen: true },
+      });
+      if (!fresh || fresh.statusDokumen === "VOID") {
+        throw new Error("Invoice batal tidak bisa dikirim.");
+      }
+
       const sj = await tx.suratJalan.create({
         data: {
           tenantId: current.tenant.id,
@@ -125,8 +136,12 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
   const current = await requirePermission("canManageSuratJalan");
   const sj = await prisma.suratJalan.findFirst({
     where: { id: suratJalanId, tenantId: current.tenant.id },
+    include: { invoice: { select: { id: true, statusDokumen: true } } },
   });
   if (!sj) return { error: "Surat Jalan tidak ditemukan." };
+  if (sj.invoice.statusDokumen === "VOID") {
+    return { error: "Invoice sudah dibatalkan. Bukti terima tidak bisa diunggah." };
+  }
 
   const file = formData.get("bukti");
   if (!(file instanceof File) || file.size === 0) {
@@ -140,7 +155,7 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
       data: {
         buktiTerimaUrl,
         statusPengiriman: "DITERIMA",
-        tanggalDiterima: new Date(),
+        ...(sj.tanggalDiterima ? {} : { tanggalDiterima: new Date() }),
       },
     });
   } catch (error) {
@@ -149,5 +164,6 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
 
   revalidatePath(`/surat-jalan/${sj.id}`);
   revalidatePath("/surat-jalan");
-  redirect(`/surat-jalan/${sj.id}?notice=${encodeURIComponent("Bukti diterima.")}`);
+  revalidatePath("/dashboard");
+  redirect(`/surat-jalan/${sj.id}?notice=${encodeURIComponent(sj.tanggalDiterima ? "Foto bukti diganti." : "Bukti diterima.")}`);
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { formatWibLong } from "@/lib/datetime";
 import { BackLink, MetaGrid, PageHeader, SecondaryLink, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { DocBadge } from "@/app/(app)/invoices/invoice-badges";
 import { ProofForm } from "./proof-form";
 
 export default async function SuratJalanDetailPage({ params }: { params: { id: string } }) {
@@ -19,6 +20,7 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
   if (!sj) notFound();
 
   const received = sj.statusPengiriman === "DITERIMA";
+  const invoiceVoid = sj.invoice.statusDokumen === "VOID";
   const meta = [
     { label: "Tanggal", value: formatWibLong(sj.tanggalSuratJalan) },
     { label: "No. PO", value: sj.noPo || "—" },
@@ -44,15 +46,20 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
             </>
           }
         />
-        <span
-          className={
-            received
-              ? "inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/15"
-              : "inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/15"
-          }
-        >
-          {received ? "Diterima" : "Dikirim · menunggu bukti"}
-        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {invoiceVoid ? <DocBadge status="VOID" /> : null}
+          <span
+            className={
+              received
+                ? "inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/15"
+                : invoiceVoid
+                  ? "inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10"
+                  : "inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/15"
+            }
+          >
+            {received ? "Diterima" : invoiceVoid ? "Dikirim · invoice batal" : "Dikirim · menunggu bukti"}
+          </span>
+        </div>
       </div>
 
       <MetaGrid items={meta} />
@@ -60,8 +67,12 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
       <div className="flex flex-col gap-5">
       <section className="panel order-1 p-4 lg:order-2 lg:p-5">
         <h2 className="text-sm font-semibold text-slate-900">{received ? "Foto bukti" : "Bukti terima"}</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {received ? "Foto tanda terima yang sudah diunggah." : "Ambil foto surat jalan yang sudah ditandatangani penerima."}
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
+          {invoiceVoid
+            ? "Invoice ini sudah dibatalkan. Bukti terima tidak bisa diunggah."
+            : received
+              ? "Foto tanda terima yang sudah diunggah."
+              : "Ambil foto surat jalan yang sudah ditandatangani penerima."}
         </p>
         {sj.buktiTerimaUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -71,9 +82,15 @@ export default async function SuratJalanDetailPage({ params }: { params: { id: s
             className="mt-4 max-h-96 w-full rounded-lg border border-slate-200 object-contain"
           />
         ) : null}
-        <div className="mt-4">
-          <ProofForm suratJalanId={sj.id} replace={Boolean(sj.buktiTerimaUrl)} />
-        </div>
+        {invoiceVoid ? (
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-800">
+            Unggah bukti dimatikan karena invoice sudah batal.
+          </p>
+        ) : (
+          <div className="mt-4">
+            <ProofForm suratJalanId={sj.id} replace={Boolean(sj.buktiTerimaUrl)} />
+          </div>
+        )}
       </section>
 
       <div className="panel order-2 overflow-hidden lg:order-1">
