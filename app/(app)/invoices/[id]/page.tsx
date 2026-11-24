@@ -21,7 +21,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       createdBy: true,
       lunasBy: true,
       pembayarans: { include: { createdBy: true }, orderBy: { tanggal: "asc" } },
-      suratJalans: { include: { items: true } },
+      suratJalans: { include: { items: true }, orderBy: { urutan: "asc" } },
     },
   });
   if (!invoice) notFound();

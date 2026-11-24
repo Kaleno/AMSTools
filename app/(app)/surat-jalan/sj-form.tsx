@@ -100,6 +100,7 @@ export function SuratJalanForm({
   return (
     <form action={formAction} className="space-y-4 pb-24 lg:space-y-6 lg:pb-0">
       <input type="hidden" name="itemsJson" value={JSON.stringify(payload)} />
+      <input type="hidden" name="noSuratJalanTouched" value={touched ? "1" : "0"} />
       <ErrorText message={state?.error} />
 
       <section className="panel grid gap-4 p-4 sm:grid-cols-2 lg:p-6">
@@ -116,7 +117,6 @@ export function SuratJalanForm({
         <Field label="No. Surat Jalan">
           <input
             name="noSuratJalan"
-            required
             value={noSj}
             onChange={(e) => {
               setTouched(true);
