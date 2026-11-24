@@ -5,9 +5,9 @@ import { hasPermission, requirePermission } from "@/lib/current-user";
 import { formatRupiah } from "@/lib/format";
 import { formatWibLong, wibDateString } from "@/lib/datetime";
 import { invoiceLocks } from "@/lib/invoice-lock";
-import { sisaTagihan } from "@/lib/payment";
+import { sisaTagihan, sumPembayaran } from "@/lib/payment";
 import { hasRemaining, itemShipStatus, remainingByItem } from "@/lib/shipping";
-import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, moneyClass, primaryButtonClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
+import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, moneyClass, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { DocBadge, ItemShipBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
 import { RecordPaymentButton, VoidButton } from "../invoice-actions";
 
@@ -29,6 +29,18 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   const locks = invoiceLocks(invoice);
   const remainRows = remainingByItem(invoice);
   const sisa = sisaTagihan(invoice);
+  const paidFromRows = sumPembayaran(invoice.pembayarans);
+  const missingPaymentRows =
+    invoice.metodePembayaran === "CREDIT" && Math.round(invoice.jumlahTerbayar) > 0 && invoice.pembayarans.length === 0;
+  const paymentMismatch =
+    invoice.metodePembayaran === "CREDIT" &&
+    invoice.pembayarans.length > 0 &&
+    Math.round(invoice.jumlahTerbayar) !== paidFromRows;
+  const zeroStuck =
+    invoice.metodePembayaran === "CREDIT" &&
+    Math.round(invoice.grandTotal) <= 0 &&
+    invoice.statusPembayaran !== "LUNAS";
+  const canPay = locks.canRecordPayment && !missingPaymentRows;
   const canCreateSj =
     hasPermission(current, "canManageSuratJalan") && invoice.statusDokumen !== "VOID" && hasRemaining(invoice);
   const payEmphasis = canCreateSj ? "secondary" : "primary";
@@ -56,14 +68,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     <div className="space-y-5 pb-28 lg:pb-0">
       <div className="above-tabbar fixed inset-x-0 z-30 border-t border-slate-200 bg-white px-4 py-2 lg:hidden">
         {canCreateSj ? (
-          <Link href={`/invoices/${invoice.id}/surat-jalan/new`} className={`${primaryButtonClass} w-full`}>
-            Buat Surat Jalan
-          </Link>
-        ) : locks.canRecordPayment ? (
+          <div className="[&>a]:w-full">
+            <PrimaryLink href={`/invoices/${invoice.id}/surat-jalan/new`}>Buat Surat Jalan</PrimaryLink>
+          </div>
+        ) : canPay ? (
           <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis="primary" fullWidth />
         ) : null}
         <div className="mt-1 flex items-center justify-around">
-          {canCreateSj && locks.canRecordPayment ? (
+          {canCreateSj && canPay ? (
             <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis="secondary" compact />
           ) : null}
           <SecondaryLink href={`/print/invoice/${invoice.id}`}>Cetak</SecondaryLink>
@@ -80,7 +92,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           action={
             <div className="hidden lg:contents">
               {canCreateSj ? <PrimaryLink href={`/invoices/${invoice.id}/surat-jalan/new`}>Buat Surat Jalan</PrimaryLink> : null}
-              {locks.canRecordPayment ? (
+              {canPay ? (
                 <RecordPaymentButton id={invoice.id} remaining={sisa} today={wibDateString()} emphasis={payEmphasis} />
               ) : null}
               <SecondaryLink href={`/print/invoice/${invoice.id}`}>Cetak</SecondaryLink>
@@ -94,6 +106,9 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           <PaymentBadge metode={invoice.metodePembayaran} status={invoice.statusPembayaran} />
           <ShipBadge status={invoice.statusPengiriman} />
         </div>
+        {locks.voidBlockMessage ? (
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">{locks.voidBlockMessage}</p>
+        ) : null}
       </div>
 
       <MetaGrid items={meta} />
@@ -199,11 +214,29 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       {invoice.metodePembayaran === "CREDIT" ? (
         <section className="panel p-5">
           <h2 className="mb-4 text-sm font-semibold text-slate-900">Pembayaran</h2>
+          {zeroStuck ? (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-800">
+              Total tagihan Rp0, tetapi status masih belum lunas. Invoice ini tetap muncul di piutang sampai data diperbaiki.
+            </p>
+          ) : null}
+          {paymentMismatch ? (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-800">
+              Jumlah terbayar di invoice ({formatRupiah(invoice.jumlahTerbayar)}) tidak sama dengan rincian pembayaran (
+              {formatRupiah(paidFromRows)}). Angka ini perlu perbaikan data.
+            </p>
+          ) : null}
           {invoice.pembayarans.length === 0 ? (
-            invoice.jumlahTerbayar > 0 ? (
-              <p className="text-sm text-slate-600">
+            Math.round(invoice.grandTotal) <= 0 && invoice.statusPembayaran === "LUNAS" ? (
+              <p className="text-sm leading-relaxed text-slate-600">
+                Total tagihan Rp0, jadi invoice ini lunas tanpa pembayaran dan tidak masuk piutang.
+              </p>
+            ) : invoice.jumlahTerbayar > 0 ? (
+              <p className="text-sm leading-relaxed text-slate-600">
                 Terbayar {formatRupiah(invoice.jumlahTerbayar)}
                 {invoice.tanggalLunas ? ` pada ${formatWibLong(invoice.tanggalLunas)}` : ""}. Rincian pembayaran belum tersimpan.
+                {invoice.statusPembayaran !== "LUNAS"
+                  ? " Pembayaran baru dan ubah total dikunci sampai data ini diperbaiki."
+                  : ""}
               </p>
             ) : (
               <p className="text-sm text-slate-500">Belum ada pembayaran. DP dan pelunasan dicatat di sini.</p>

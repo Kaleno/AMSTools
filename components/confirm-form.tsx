@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { dangerButtonClass, secondaryButtonClass, successButtonClass, Toast } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { dangerButtonClass, ErrorText, secondaryButtonClass, successButtonClass, Toast } from "@/components/ui";
 
 export function ConfirmForm({
   action,
@@ -13,7 +14,7 @@ export function ConfirmForm({
   triggerClassName,
   successMessage,
 }: {
-  action: () => Promise<void> | void;
+  action: () => Promise<void | { error?: string | null }> | void | { error?: string | null };
   title: string;
   message: string;
   confirmLabel: string;
@@ -22,8 +23,10 @@ export function ConfirmForm({
   triggerClassName: string;
   successMessage?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,7 +64,12 @@ export function ConfirmForm({
           <div role="dialog" aria-modal="true" className="relative w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             <p className="mt-1 text-sm leading-relaxed text-slate-500">{message}</p>
-            <div className="mt-5 flex justify-end gap-2">
+            {error ? (
+              <div className="mt-3">
+                <ErrorText message={error} />
+              </div>
+            ) : null}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button type="button" className={secondaryButtonClass} onClick={() => setOpen(false)} disabled={pending}>
                 Batal
               </button>
@@ -71,10 +79,16 @@ export function ConfirmForm({
                 disabled={pending}
                 onClick={async () => {
                   setPending(true);
+                  setError(null);
                   try {
-                    await action();
+                    const result = await action();
+                    if (result && typeof result === "object" && result.error) {
+                      setError(result.error);
+                      return;
+                    }
                     setOpen(false);
                     if (successMessage) setToast(successMessage);
+                    router.refresh();
                   } finally {
                     setPending(false);
                   }

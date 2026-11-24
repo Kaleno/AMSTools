@@ -126,7 +126,7 @@ export default async function DashboardPage() {
       select: { grandTotal: true, jumlahTerbayar: true },
     }),
     prisma.suratJalan.count({
-      where: { tenantId, statusPengiriman: "DIKIRIM" },
+      where: { tenantId, statusPengiriman: "DIKIRIM", invoice: { statusDokumen: "AKTIF" } },
     }),
     prisma.invoice.count({
       where: {
