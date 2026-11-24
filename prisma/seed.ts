@@ -16,6 +16,8 @@ async function main() {
       role: "SUPER_ADMIN",
       isActive: true,
       tenantId: null,
+      mustChangePassword: false,
+      sessionVersion: { increment: 1 },
       canViewDashboard: true,
       canManageInvoice: true,
       canManageSuratJalan: true,

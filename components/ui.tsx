@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { ChevronLeft } from "lucide-react";
@@ -118,8 +119,17 @@ export function SubmitButton({ children }: { children: React.ReactNode; pending?
 }
 
 export function ErrorText({ message }: { message?: string | null }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (!message) return;
+    ref.current?.scrollIntoView({ block: "start" });
+  }, [message]);
   if (!message) return null;
-  return <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-100">{message}</p>;
+  return (
+    <p ref={ref} className="scroll-mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-100">
+      {message}
+    </p>
+  );
 }
 
 export function Badge({ active }: { active: boolean }) {

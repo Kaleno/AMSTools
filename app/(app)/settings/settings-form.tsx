@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useFormState } from "react-dom";
 import type { Tenant } from "@prisma/client";
+import { PasswordField } from "@/components/password-field";
 import { updateSettings, type ActionState } from "./actions";
 import { ErrorText, Field, inputClass, SubmitButton } from "@/components/ui";
 
@@ -9,15 +11,18 @@ const initial: ActionState = { error: null };
 
 export function SettingsForm({ tenant }: { tenant: Tenant }) {
   const [state, formAction] = useFormState(updateSettings, initial);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const confirmTouched = password.length > 0 || confirmPassword.length > 0;
 
   return (
-    <form action={formAction} className="max-w-3xl space-y-6">
+    <form action={formAction} className="max-w-3xl space-y-6 pb-24 lg:pb-0">
       {state?.ok ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Pengaturan tersimpan.</p>
       ) : null}
       <ErrorText message={state?.error} />
 
-      <section className="space-y-4 panel p-6">
+      <section className="panel space-y-4 p-4 lg:p-6">
         <h2 className="font-semibold text-slate-900">Profil perusahaan</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Nama PT">
@@ -48,7 +53,7 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
         </Field>
       </section>
 
-      <section className="space-y-4 panel p-6">
+      <section className="panel space-y-4 p-4 lg:p-6">
         <h2 className="font-semibold text-slate-900">Dashboard</h2>
         <Field label="Jatuh tempo terdekat (hari)">
           <input
@@ -68,7 +73,7 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
         </p>
       </section>
 
-      <section className="space-y-4 panel p-6">
+      <section className="panel space-y-4 p-4 lg:p-6">
         <h2 className="font-semibold text-slate-900">Pajak & nomor dokumen</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="PPN default (%)">
@@ -92,7 +97,7 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
         </p>
       </section>
 
-      <section className="space-y-4 panel p-6">
+      <section className="panel space-y-4 p-4 lg:p-6">
         <h2 className="font-semibold text-slate-900">Cetakan</h2>
         <Field label="Info rekening (Invoice)">
           <textarea name="bankInfo" rows={3} defaultValue={tenant.bankInfo ?? ""} className={inputClass} />
@@ -108,14 +113,36 @@ export function SettingsForm({ tenant }: { tenant: Tenant }) {
         </Field>
       </section>
 
-      <section className="space-y-4 panel p-6">
+      <section className="panel space-y-4 p-4 lg:p-6">
         <h2 className="font-semibold text-slate-900">Password Owner</h2>
-        <Field label="Password baru (kosongkan jika tidak diubah)">
-          <input name="newPassword" type="password" className={inputClass} />
+        <p className="text-sm text-slate-500">Kosongkan jika tidak diubah. Menyimpan password baru mengakhiri sesi di perangkat lain.</p>
+        <PasswordField name="newPassword" label="Password baru" onValueChange={setPassword} />
+        <Field label="Ulangi password baru">
+          <input
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            spellCheck={false}
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            className={inputClass}
+          />
         </Field>
+        {confirmTouched ? (
+          <p className={`text-xs ${password === confirmPassword ? "text-emerald-700" : "text-slate-500"}`}>
+            {password === confirmPassword ? "Konfirmasi sama." : "Konfirmasi belum sama."}
+          </p>
+        ) : null}
       </section>
 
-      <SubmitButton>Simpan pengaturan</SubmitButton>
+      <div className="above-tabbar fixed inset-x-0 z-30 border-t border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <div className="[&_button]:w-full">
+          <SubmitButton>Simpan pengaturan</SubmitButton>
+        </div>
+      </div>
+      <div className="hidden lg:block">
+        <SubmitButton>Simpan pengaturan</SubmitButton>
+      </div>
     </form>
   );
 }

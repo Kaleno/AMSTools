@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/current-user";
+import { ResetPasswordButton } from "@/components/reset-password-button";
 import { Badge, EmptyState, ListSummary, PageHeader, PrimaryLink, TableWrap, tableClass, tdClass, thClass, theadClass, trClass } from "@/components/ui";
 import { ToggleAdminButton } from "./toggle-button";
 
@@ -29,15 +30,24 @@ export default async function AdminsPage() {
           <ListSummary>{admins.length} akun admin</ListSummary>
           <div className="panel divide-y divide-slate-100 overflow-hidden md:hidden">
             {admins.map((admin) => (
-              <div key={admin.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">{admin.name}</p>
-                  <p className="truncate text-xs text-slate-500">{admin.email}</p>
+              <div key={admin.id} className="px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{admin.name}</p>
+                    <p className="truncate text-xs text-slate-500">{admin.email}</p>
+                    {admin.mustChangePassword ? (
+                      <p className="text-xs text-amber-700">Menunggu ganti password</p>
+                    ) : null}
+                  </div>
+                  <Badge active={admin.isActive} />
                 </div>
-                <Badge active={admin.isActive} />
-                <Link href={`/admins/${admin.id}/edit`} className="text-sm font-medium text-steel">
-                  Edit
-                </Link>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4">
+                  <Link href={`/admins/${admin.id}/edit`} className="inline-flex min-h-11 items-center text-sm font-medium text-steel">
+                    Edit
+                  </Link>
+                  <ResetPasswordButton userId={admin.id} userName={admin.name} />
+                  <ToggleAdminButton adminId={admin.id} isActive={admin.isActive} />
+                </div>
               </div>
             ))}
           </div>
@@ -56,15 +66,21 @@ export default async function AdminsPage() {
                 {admins.map((admin) => (
                   <tr key={admin.id} className={trClass}>
                     <td className={`${tdClass} font-medium text-slate-900`}>{admin.name}</td>
-                    <td className={tdClass}>{admin.email}</td>
+                    <td className={tdClass}>
+                      <p>{admin.email}</p>
+                      {admin.mustChangePassword ? (
+                        <p className="text-xs text-amber-700">Menunggu ganti password</p>
+                      ) : null}
+                    </td>
                     <td className={tdClass}>
                       <Badge active={admin.isActive} />
                     </td>
                     <td className={`${tdClass} text-right`}>
-                      <div className="flex justify-end gap-3">
+                      <div className="flex items-center justify-end gap-3">
                         <Link href={`/admins/${admin.id}/edit`} className="text-sm font-medium text-steel hover:text-steel-dark">
                           Edit
                         </Link>
+                        <ResetPasswordButton userId={admin.id} userName={admin.name} />
                         <ToggleAdminButton adminId={admin.id} isActive={admin.isActive} />
                       </div>
                     </td>

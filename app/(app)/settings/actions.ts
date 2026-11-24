@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/current-user";
+import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
+import { setSessionCookie } from "@/lib/session-cookie";
 import { saveTenantLogo } from "@/lib/uploads";
 
 export type ActionState = { error: string | null; ok?: boolean };
@@ -31,7 +33,8 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   const ppnRaw = str(formData, "ppnPercentage");
   const ppnPercentage = Number(ppnRaw || "11");
   const dueDays = Number(str(formData, "dashboardDueDays") || "7");
-  const newPassword = str(formData, "newPassword");
+  const newPassword = passwordFrom(formData, "newPassword");
+  const confirmPassword = passwordFrom(formData, "confirmPassword");
 
   if (!namaPt || !alamatPt || !telpPt) {
     return { error: "Nama PT, alamat, dan telepon wajib diisi." };
@@ -53,14 +56,21 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
     }
   }
 
-  if (newPassword) {
-    if (newPassword.length < 8) {
-      return { error: "Password baru minimal 8 karakter." };
+  if (newPassword || confirmPassword) {
+    if (newPassword !== confirmPassword) {
+      return { error: "Konfirmasi password tidak sama." };
     }
-    await prisma.user.update({
+    const policy = passwordPolicyMessage(newPassword);
+    if (policy) return { error: policy };
+    const updated = await prisma.user.update({
       where: { id: current.user.id },
-      data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 12),
+        mustChangePassword: false,
+        sessionVersion: { increment: 1 },
+      },
     });
+    await setSessionCookie(updated);
   }
 
   await prisma.tenant.update({

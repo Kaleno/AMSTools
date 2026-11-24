@@ -16,7 +16,11 @@ function isPublic(pathname: string) {
   ) {
     return true;
   }
-  if (pathname.startsWith("/api/auth/login")) {
+  if (
+    pathname.startsWith("/api/auth/login") ||
+    pathname.startsWith("/api/auth/logout") ||
+    pathname.startsWith("/api/auth/clear-session")
+  ) {
     return true;
   }
   return false;

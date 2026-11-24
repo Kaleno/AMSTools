@@ -26,6 +26,13 @@ body {
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
+  scroll-padding-bottom: calc(8rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .app-scroll {
+    scroll-padding-bottom: 1.5rem;
+  }
 }
 
 .app-scroll::-webkit-scrollbar {

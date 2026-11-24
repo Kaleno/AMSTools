@@ -7,7 +7,7 @@ export function ToggleStatusButton({ tenantId, isActive }: { tenantId: string; i
   if (!isActive) {
     return (
       <form action={toggleCompanyStatus.bind(null, tenantId)}>
-        <button type="submit" className="text-sm font-medium text-steel hover:text-steel-dark">
+        <button type="submit" className="inline-flex min-h-11 items-center text-sm font-medium text-steel hover:text-steel-dark">
           Aktifkan
         </button>
       </form>
@@ -20,7 +20,7 @@ export function ToggleStatusButton({ tenantId, isActive }: { tenantId: string; i
       message="Pengguna perusahaan ini tidak bisa masuk sampai diaktifkan lagi."
       confirmLabel="Suspend"
       triggerLabel="Suspend"
-      triggerClassName="text-sm font-medium text-rose-600 hover:text-rose-700"
+      triggerClassName="inline-flex min-h-11 items-center text-sm font-medium text-rose-600 hover:text-rose-700"
       successMessage="Status perusahaan diperbarui."
     />
   );

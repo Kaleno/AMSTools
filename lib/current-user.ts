@@ -27,6 +27,9 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user || !user.isActive) return null;
   if (user.tenant && !user.tenant.isActive) return null;
+  if (user.sessionVersion !== session.sessionVersion) {
+    redirect("/api/auth/clear-session");
+  }
 
   return {
     session: {
@@ -35,6 +38,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       email: user.email,
       role: user.role as UserRole,
       tenantId: user.tenantId,
+      sessionVersion: user.sessionVersion,
     },
     user,
     tenant: user.tenant,
@@ -45,6 +49,9 @@ export async function requireUser(): Promise<CurrentUser> {
   const current = await getCurrentUser();
   if (!current) {
     redirect("/login");
+  }
+  if (current.user.mustChangePassword) {
+    redirect("/change-password");
   }
   return current;
 }

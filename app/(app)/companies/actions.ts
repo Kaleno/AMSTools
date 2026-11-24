@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/current-user";
+import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
 
 export type ActionState = { error: string | null };
 
@@ -22,14 +23,13 @@ export async function createCompany(_prev: ActionState, formData: FormData): Pro
   const kotaSurat = str(formData, "kotaSurat") || "Cikarang";
   const ownerName = str(formData, "ownerName");
   const ownerEmail = str(formData, "ownerEmail").toLowerCase();
-  const ownerPassword = str(formData, "ownerPassword");
+  const ownerPassword = passwordFrom(formData, "ownerPassword");
 
   if (!namaPt || !alamatPt || !telpPt || !ownerName || !ownerEmail || !ownerPassword) {
     return { error: "Lengkapi data perusahaan dan akun Owner." };
   }
-  if (ownerPassword.length < 8) {
-    return { error: "Password Owner minimal 8 karakter." };
-  }
+  const policy = passwordPolicyMessage(ownerPassword);
+  if (policy) return { error: policy };
 
   const exists = await prisma.user.findUnique({ where: { email: ownerEmail } });
   if (exists) {
@@ -76,10 +76,14 @@ export async function updateCompany(tenantId: string, _prev: ActionState, formDa
   const kotaSurat = str(formData, "kotaSurat") || "Cikarang";
   const ownerName = str(formData, "ownerName");
   const ownerEmail = str(formData, "ownerEmail").toLowerCase();
-  const ownerPassword = str(formData, "ownerPassword");
+  const ownerPassword = passwordFrom(formData, "ownerPassword");
 
   if (!namaPt || !alamatPt || !telpPt || !ownerName || !ownerEmail) {
     return { error: "Lengkapi data perusahaan dan akun Owner." };
+  }
+  if (ownerPassword) {
+    const policy = passwordPolicyMessage(ownerPassword);
+    if (policy) return { error: policy };
   }
 
   const tenant = await prisma.tenant.findUnique({
@@ -100,15 +104,20 @@ export async function updateCompany(tenantId: string, _prev: ActionState, formDa
     return { error: "Email Owner sudah terpakai." };
   }
 
-  const data: { name: string; email: string; passwordHash?: string } = {
+  const data: {
+    name: string;
+    email: string;
+    passwordHash?: string;
+    mustChangePassword?: boolean;
+    sessionVersion?: { increment: number };
+  } = {
     name: ownerName,
     email: ownerEmail,
   };
   if (ownerPassword) {
-    if (ownerPassword.length < 8) {
-      return { error: "Password Owner minimal 8 karakter." };
-    }
     data.passwordHash = await bcrypt.hash(ownerPassword, 12);
+    data.mustChangePassword = false;
+    data.sessionVersion = { increment: 1 };
   }
 
   await prisma.$transaction([

@@ -11,6 +11,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const reason = searchParams.get("reason");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -22,9 +23,14 @@ export function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { error?: string; mustChangePassword?: boolean };
       if (!response.ok) {
         setError(data.error ?? "Gagal masuk.");
+        return;
+      }
+      if (data.mustChangePassword) {
+        router.replace("/change-password");
+        router.refresh();
         return;
       }
       const from = searchParams.get("from");
@@ -67,6 +73,11 @@ export function LoginForm() {
           className={inputClass}
         />
       </div>
+      {reason === "password" && !error ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Sesi berakhir karena password diubah. Masuk kembali dengan password baru.
+        </p>
+      ) : null}
       {error ? (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
       ) : null}
