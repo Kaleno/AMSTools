@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
-import { calcInvoice } from "@/lib/invoice-calc";
+import { calcInvoice, wholeRupiahLines } from "@/lib/invoice-calc";
 import { foreignInvoiceItemIds } from "@/lib/invoice-items";
 import { invoiceLocks, shippedQtyByItem } from "@/lib/invoice-lock";
 import { lockInvoiceRow } from "@/lib/invoice-row-lock";
@@ -87,21 +87,22 @@ async function buildTotals(tenantId: string, lines: LineInput[], formData: FormD
   });
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  const resolved = lines.map((line) => {
-    const product = productMap.get(line.productId);
-    if (!product) {
-      throw new Error("Produk tidak valid.");
-    }
-    return {
-      id: line.id,
-      productId: product.id,
-      namaProduk: product.namaProduk,
-      satuan: product.satuan,
-      qty: line.qty,
-      hargaSatuan: Math.round(line.hargaSatuan),
-      subtotal: Math.round(line.qty * line.hargaSatuan),
-    };
-  });
+  const resolved = wholeRupiahLines(
+    lines.map((line) => {
+      const product = productMap.get(line.productId);
+      if (!product) {
+        throw new Error("Produk tidak valid.");
+      }
+      return {
+        id: line.id,
+        productId: product.id,
+        namaProduk: product.namaProduk,
+        satuan: product.satuan,
+        qty: line.qty,
+        hargaSatuan: line.hargaSatuan,
+      };
+    }),
+  );
 
   const useDiskon = formData.get("useDiskon") === "on";
   const usePpn = formData.get("usePpn") === "on";

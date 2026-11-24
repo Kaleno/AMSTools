@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { Customer, Product } from "@prisma/client";
-import { calcInvoice } from "@/lib/invoice-calc";
+import { calcInvoice, lineSubtotal } from "@/lib/invoice-calc";
 import { formatRupiah } from "@/lib/format";
 import { ErrorText, Field, inputClass, SecondaryLink, SubmitButton } from "@/components/ui";
 import { previewInvoiceNumber, type ActionState } from "./actions";
@@ -267,7 +267,7 @@ export function InvoiceForm({
               </div>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <p className="min-w-0 text-sm text-slate-500">
-                  {line.satuan || "—"} · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(line.qty * line.hargaSatuan)}</span>
+                  {line.satuan || "—"} · <span className="font-semibold tabular-nums text-slate-900">{formatRupiah(lineSubtotal(line))}</span>
                 </p>
                 {readOnly || line.locked ? null : (
                   <button
@@ -324,7 +324,7 @@ export function InvoiceForm({
                       onChange={(hargaSatuan) => setLine(line.key, { hargaSatuan })}
                     />
                   </td>
-                  <td className="py-2 pr-2 text-right tabular-nums">{formatRupiah(line.qty * line.hargaSatuan)}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">{formatRupiah(lineSubtotal(line))}</td>
                   <td className="py-2">
                     {readOnly || line.locked ? null : (
                       <button
