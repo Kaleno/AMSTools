@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { ErrorText, Field, inputClass, SecondaryLink, SubmitButton } from "@/components/ui";
 import { previewSjNumber, type ActionState } from "./actions";
 
@@ -34,7 +33,7 @@ export function SuratJalanForm({
   alreadyShippedCount?: number;
 }) {
   const shippable = rows;
-  const [state, formAction] = useFormState(action, initial);
+  const [state, formAction] = useActionState(action, initial);
   const [tanggal, setTanggal] = useState(tanggalDefault);
   const [noSj, setNoSj] = useState(suggestedNumber);
   const [touched, setTouched] = useState(false);

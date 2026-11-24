@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useState } from "react";
 import { PasswordField } from "@/components/password-field";
 import { ErrorText, Field, inputClass, SubmitButton } from "@/components/ui";
 import { changePersonalPassword, type ActionState } from "./password-actions";
@@ -9,7 +8,7 @@ import { changePersonalPassword, type ActionState } from "./password-actions";
 const initial: ActionState = { error: null };
 
 export function AccountForm() {
-  const [state, formAction] = useFormState(changePersonalPassword, initial);
+  const [state, formAction] = useActionState(changePersonalPassword, initial);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const confirmTouched = password.length > 0 || confirmPassword.length > 0;

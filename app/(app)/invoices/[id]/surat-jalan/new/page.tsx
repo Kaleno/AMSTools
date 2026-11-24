@@ -8,10 +8,11 @@ import { PageHeader } from "@/components/ui";
 import { createSuratJalan } from "@/app/(app)/surat-jalan/actions";
 import { SuratJalanForm } from "@/app/(app)/surat-jalan/sj-form";
 
-export default async function NewSuratJalanPage({ params }: { params: { id: string } }) {
+export default async function NewSuratJalanPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageSuratJalan");
   const invoice = await prisma.invoice.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
     include: { items: true, customer: true, suratJalans: { include: { items: true } } },
   });
   if (!invoice) notFound();

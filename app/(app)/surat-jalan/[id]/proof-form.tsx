@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useState } from "react";
 import { Camera } from "lucide-react";
 import { ErrorText, SubmitButton } from "@/components/ui";
 import { uploadProof, type ActionState } from "../actions";
@@ -9,7 +8,7 @@ import { uploadProof, type ActionState } from "../actions";
 const initial: ActionState = { error: null };
 
 export function ProofForm({ suratJalanId, replace }: { suratJalanId: string; replace?: boolean }) {
-  const [state, formAction] = useFormState(uploadProof.bind(null, suratJalanId), initial);
+  const [state, formAction] = useActionState(uploadProof.bind(null, suratJalanId), initial);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 

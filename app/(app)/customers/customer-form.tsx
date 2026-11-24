@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import type { Customer } from "@prisma/client";
 import type { ActionState } from "./actions";
 import { ErrorText, Field, inputClass, SecondaryLink, SubmitButton } from "@/components/ui";
@@ -16,7 +16,7 @@ export function CustomerForm({
   customer?: Customer;
   submitLabel: string;
 }) {
-  const [state, formAction] = useFormState(action, initial);
+  const [state, formAction] = useActionState(action, initial);
 
   return (
     <form action={formAction} className="max-w-2xl space-y-4 panel p-6">

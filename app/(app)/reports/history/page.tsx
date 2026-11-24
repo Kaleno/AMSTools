@@ -10,13 +10,14 @@ import { PaymentBadge } from "../../invoices/invoice-badges";
 export default async function PurchaseHistoryPage({
   searchParams,
 }: {
-  searchParams: { customerId?: string; from?: string; to?: string };
+  searchParams: Promise<{ customerId?: string; from?: string; to?: string }>;
 }) {
   const current = await requirePermission("canViewReports");
+  const query = await searchParams;
   const month = wibMonthRange();
-  const from = searchParams.from || toDateInputValue(month.start);
-  const to = searchParams.to || wibDateString();
-  const customerId = searchParams.customerId ?? "";
+  const from = query.from || toDateInputValue(month.start);
+  const to = query.to || wibDateString();
+  const customerId = query.customerId ?? "";
 
   const rangeStart = parseWibDate(from);
   const rangeEnd = new Date(parseWibDate(to).getTime() + 24 * 60 * 60 * 1000);

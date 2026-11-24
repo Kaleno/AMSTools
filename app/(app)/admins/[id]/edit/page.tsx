@@ -5,10 +5,11 @@ import { PageHeader } from "@/components/ui";
 import { updateAdmin } from "../../actions";
 import { AdminForm } from "../../admin-form";
 
-export default async function EditAdminPage({ params }: { params: { id: string } }) {
+export default async function EditAdminPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requireRoles(["OWNER"]);
   const admin = await prisma.user.findFirst({
-    where: { id: params.id, tenantId: current.tenant!.id, role: "ADMIN" },
+    where: { id, tenantId: current.tenant!.id, role: "ADMIN" },
   });
   if (!admin) notFound();
 

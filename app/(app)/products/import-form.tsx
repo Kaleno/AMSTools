@@ -1,14 +1,14 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { confirmProductImport, previewProductImport, type ImportState } from "./actions";
 import { ErrorText, SubmitButton } from "@/components/ui";
 
 const initial: ImportState = { error: null };
 
 export function ProductImportForm() {
-  const [previewState, previewAction] = useFormState(previewProductImport, initial);
-  const [confirmState, confirmAction] = useFormState(confirmProductImport, initial);
+  const [previewState, previewAction] = useActionState(previewProductImport, initial);
+  const [confirmState, confirmAction] = useActionState(confirmProductImport, initial);
   const preview = previewState?.preview ?? [];
   const valid = preview.filter((row) => !row.error);
   const invalid = preview.filter((row) => row.error);

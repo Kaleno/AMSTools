@@ -9,7 +9,7 @@ const TYPES: Record<string, string> = {
   webp: "image/webp",
 };
 
-export async function GET(_request: Request, { params }: { params: { path: string[] } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const current = await getCurrentUser();
   if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +19,8 @@ export async function GET(_request: Request, { params }: { params: { path: strin
   }
   const session = current.session;
 
-  const relative = params.path.join("/");
+  const { path } = await params;
+  const relative = path.join("/");
   if (relative.startsWith("logos/")) {
     const tenantFromFile = relative.replace(/^logos\//, "").replace(/\.[^.]+$/, "");
     if (session.role !== "SUPER_ADMIN" && session.tenantId !== tenantFromFile) {

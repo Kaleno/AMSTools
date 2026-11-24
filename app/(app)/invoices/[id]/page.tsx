@@ -11,10 +11,11 @@ import { BackLink, MetaGrid, PageHeader, PrimaryLink, SecondaryLink, moneyClass,
 import { DocBadge, ItemShipBadge, PaymentBadge, ShipBadge } from "../invoice-badges";
 import { RecordPaymentButton, VoidButton } from "../invoice-actions";
 
-export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageInvoice");
   const invoice = await prisma.invoice.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
     include: {
       customer: true,
       items: true,

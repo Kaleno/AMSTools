@@ -6,10 +6,11 @@ import { padRows } from "@/lib/print-rows";
 import { CompanyLetterhead } from "../../company-letterhead";
 import { PrintToolbar } from "../../print-toolbar";
 
-export default async function PrintSuratJalanPage({ params }: { params: { id: string } }) {
+export default async function PrintSuratJalanPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageSuratJalan");
   const sj = await prisma.suratJalan.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
     include: {
       items: true,
       tenant: true,
