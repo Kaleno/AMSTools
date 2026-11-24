@@ -5,10 +5,11 @@ import { PageHeader } from "@/components/ui";
 import { updateProduct } from "../../actions";
 import { ProductForm } from "../../product-form";
 
-export default async function EditProductPage({ params }: { params: { id: string } }) {
+export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageMasterData");
   const product = await prisma.product.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
   });
   if (!product) notFound();
 

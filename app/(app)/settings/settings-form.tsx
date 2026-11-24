@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useState } from "react";
 import type { Tenant } from "@prisma/client";
 import { PasswordField } from "@/components/password-field";
 import { updateSettings, type ActionState } from "./actions";
@@ -10,7 +9,7 @@ import { ErrorText, Field, inputClass, SubmitButton } from "@/components/ui";
 const initial: ActionState = { error: null };
 
 export function SettingsForm({ tenant }: { tenant: Tenant }) {
-  const [state, formAction] = useFormState(updateSettings, initial);
+  const [state, formAction] = useActionState(updateSettings, initial);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const confirmTouched = password.length > 0 || confirmPassword.length > 0;

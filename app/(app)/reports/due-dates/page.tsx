@@ -14,10 +14,11 @@ import { RecordPaymentButton } from "../../invoices/invoice-actions";
 export default async function DueDatesPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Promise<{ filter?: string }>;
 }) {
   const current = await requirePermission("canViewReports");
-  const filter = searchParams.filter ?? "semua";
+  const query = await searchParams;
+  const filter = query.filter ?? "semua";
   const todayStr = wibDateString();
   const todayStart = parseWibDate(todayStr);
   const dueDays = current.tenant.dashboardDueDays;

@@ -11,10 +11,11 @@ import { DocBadge, ShipBadge } from "@/app/(app)/invoices/invoice-badges";
 export default async function SuratJalanListPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Promise<{ status?: string }>;
 }) {
   const current = await requirePermission("canManageSuratJalan");
-  const status = searchParams.status ?? "semua";
+  const query = await searchParams;
+  const status = query.status ?? "semua";
 
   const rows = await prisma.suratJalan.findMany({
     where: {

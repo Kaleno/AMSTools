@@ -29,5 +29,6 @@ export async function setSessionCookie(user: {
 }) {
   const token = await signSession(sessionClaims(user));
   const { name, ...options } = sessionCookieOptions();
-  cookies().set(name, token, options);
+  const cookieStore = await cookies();
+  cookieStore.set(name, token, options);
 }

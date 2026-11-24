@@ -14,12 +14,13 @@ import { DocBadge, PaymentBadge, ShipBadge } from "./invoice-badges";
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string; kirim?: string };
+  searchParams: Promise<{ q?: string; status?: string; kirim?: string }>;
 }) {
   const current = await requirePermission("canManageInvoice");
-  const q = searchParams.q?.trim() ?? "";
-  const status = searchParams.status ?? "aktif";
-  const kirim = searchParams.kirim ?? "semua";
+  const query = await searchParams;
+  const q = query.q?.trim() ?? "";
+  const status = query.status ?? "aktif";
+  const kirim = query.kirim ?? "semua";
 
   const invoices = await prisma.invoice.findMany({
     where: {

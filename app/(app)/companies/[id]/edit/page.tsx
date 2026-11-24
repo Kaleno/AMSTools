@@ -5,10 +5,11 @@ import { PageHeader } from "@/components/ui";
 import { updateCompany } from "../../actions";
 import { CompanyForm } from "../../company-form";
 
-export default async function EditCompanyPage({ params }: { params: { id: string } }) {
+export default async function EditCompanyPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   await requireSuperAdmin();
   const tenant = await prisma.tenant.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { users: { where: { role: "OWNER" }, take: 1 } },
   });
   if (!tenant) notFound();

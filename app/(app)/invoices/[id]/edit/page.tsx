@@ -7,10 +7,11 @@ import { PageHeader } from "@/components/ui";
 import { updateInvoice } from "../../actions";
 import { InvoiceForm } from "../../invoice-form";
 
-export default async function EditInvoicePage({ params }: { params: { id: string } }) {
+export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageInvoice");
   const invoice = await prisma.invoice.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
     include: { items: true, pembayarans: true, suratJalans: { include: { items: true } } },
   });
   if (!invoice) notFound();

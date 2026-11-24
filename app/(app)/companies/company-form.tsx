@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import type { ActionState } from "./actions";
 import { PasswordField } from "@/components/password-field";
 import { ErrorText, Field, inputClass, SecondaryLink, SubmitButton } from "@/components/ui";
@@ -26,7 +26,7 @@ export function CompanyForm({
   values?: Values;
   submitLabel: string;
 }) {
-  const [state, formAction] = useFormState(action, initial);
+  const [state, formAction] = useActionState(action, initial);
 
   return (
     <form action={formAction} className="panel max-w-2xl space-y-4 p-4 pb-24 lg:p-6 lg:pb-6">

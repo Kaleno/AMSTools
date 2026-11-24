@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { Customer, Product } from "@prisma/client";
 import { calcInvoice } from "@/lib/invoice-calc";
 import { formatRupiah } from "@/lib/format";
@@ -70,7 +69,7 @@ export function InvoiceForm({
   catatanOnly?: boolean;
   autoNumber?: boolean;
 }) {
-  const [state, formAction] = useFormState(action, initial);
+  const [state, formAction] = useActionState(action, initial);
   const [tanggal, setTanggal] = useState(defaults?.tanggalInvoice ?? "");
   const [noInvoice, setNoInvoice] = useState(defaults?.noInvoice ?? suggestedNumber);
   const [numberTouched, setNumberTouched] = useState(!autoNumber);

@@ -8,10 +8,11 @@ import { DocBadge } from "@/app/(app)/invoices/invoice-badges";
 import { CancelSuratJalanButton } from "./cancel-button";
 import { ProofForm } from "./proof-form";
 
-export default async function SuratJalanDetailPage({ params }: { params: { id: string } }) {
+export default async function SuratJalanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageSuratJalan");
   const sj = await prisma.suratJalan.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
     include: {
       items: true,
       createdBy: true,

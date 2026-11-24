@@ -5,10 +5,11 @@ import { PageHeader } from "@/components/ui";
 import { updateCustomer } from "../../actions";
 import { CustomerForm } from "../../customer-form";
 
-export default async function EditCustomerPage({ params }: { params: { id: string } }) {
+export default async function EditCustomerPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const current = await requirePermission("canManageMasterData");
   const customer = await prisma.customer.findFirst({
-    where: { id: params.id, tenantId: current.tenant.id },
+    where: { id, tenantId: current.tenant.id },
   });
   if (!customer) notFound();
 
