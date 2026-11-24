@@ -11,7 +11,7 @@ export default async function SettingsPage() {
         title="Pengaturan perusahaan"
         description="Profil PT dan kustomisasi cetakan Invoice / Surat Jalan."
       />
-      <section className="mb-6 panel p-6">
+      <section className="panel mb-6 p-4 lg:p-6">
         <h2 className="mb-3 font-semibold text-slate-900">Aplikasi (PWA)</h2>
         <InstallAppButton />
       </section>

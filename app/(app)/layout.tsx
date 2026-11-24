@@ -7,6 +7,9 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
   if (!current) {
     redirect("/login");
   }
+  if (current.user.mustChangePassword) {
+    redirect("/change-password");
+  }
 
   return <AppShell current={current}>{children}</AppShell>;
 }

@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/current-user";
 
 export default async function HomePage() {
-  const session = await getSession();
-  redirect(session ? "/dashboard" : "/login");
+  const current = await getCurrentUser();
+  if (!current) redirect("/login");
+  if (current.user.mustChangePassword) redirect("/change-password");
+  redirect("/dashboard");
 }

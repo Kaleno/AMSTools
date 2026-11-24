@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/current-user";
+import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
 
 export type ActionState = { error: string | null };
 
@@ -26,14 +27,13 @@ export async function createAdmin(_prev: ActionState, formData: FormData): Promi
   const current = await requireRoles(["OWNER"]);
   const name = str(formData, "name");
   const email = str(formData, "email").toLowerCase();
-  const password = str(formData, "password");
+  const password = passwordFrom(formData, "password");
 
   if (!name || !email || !password) {
     return { error: "Nama, email, dan password wajib diisi." };
   }
-  if (password.length < 8) {
-    return { error: "Password minimal 8 karakter." };
-  }
+  const policy = passwordPolicyMessage(password);
+  if (policy) return { error: policy };
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) {
     return { error: "Email sudah terpakai." };
@@ -66,9 +66,13 @@ export async function updateAdmin(adminId: string, _prev: ActionState, formData:
 
   const name = str(formData, "name");
   const email = str(formData, "email").toLowerCase();
-  const password = str(formData, "password");
+  const password = passwordFrom(formData, "password");
   if (!name || !email) {
     return { error: "Nama dan email wajib diisi." };
+  }
+  if (password) {
+    const policy = passwordPolicyMessage(password);
+    if (policy) return { error: policy };
   }
 
   const emailOwner = await prisma.user.findUnique({ where: { email } });
@@ -85,6 +89,8 @@ export async function updateAdmin(adminId: string, _prev: ActionState, formData:
       ...(password
         ? {
             passwordHash: await bcrypt.hash(password, 12),
+            mustChangePassword: false,
+            sessionVersion: { increment: 1 },
           }
         : {}),
     },

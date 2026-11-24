@@ -2,6 +2,7 @@
 
 import { useFormState } from "react-dom";
 import type { ActionState } from "./actions";
+import { PasswordField } from "@/components/password-field";
 import { ErrorText, Field, inputClass, SecondaryLink, SubmitButton } from "@/components/ui";
 
 const initial: ActionState = { error: null };
@@ -28,7 +29,7 @@ export function CompanyForm({
   const [state, formAction] = useFormState(action, initial);
 
   return (
-    <form action={formAction} className="max-w-2xl space-y-4 panel p-6">
+    <form action={formAction} className="panel max-w-2xl space-y-4 p-4 pb-24 lg:p-6 lg:pb-6">
       <ErrorText message={state?.error} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nama PT">
@@ -64,18 +65,24 @@ export function CompanyForm({
           </Field>
         </div>
         <div className="mt-4">
-          <Field label={values ? "Password baru (kosongkan jika tidak diubah)" : "Password"}>
-            <input
-              name="ownerPassword"
-              type="password"
-              required={!values}
-              minLength={values ? undefined : 8}
-              className={inputClass}
-            />
-          </Field>
+          <PasswordField
+            name="ownerPassword"
+            label={values ? "Password baru (kosongkan jika tidak diubah)" : "Password"}
+            required={!values}
+            hint={
+              values
+                ? "Kosongkan jika tidak diubah. Password baru langsung aktif dan mengakhiri sesi Owner. Untuk password sementara, gunakan Reset password di daftar."
+                : undefined
+            }
+          />
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="above-tabbar fixed inset-x-0 z-30 border-t border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <div className="[&_button]:w-full">
+          <SubmitButton>{submitLabel}</SubmitButton>
+        </div>
+      </div>
+      <div className="hidden gap-2 lg:flex">
         <SubmitButton>{submitLabel}</SubmitButton>
         <SecondaryLink href="/companies">Batal</SecondaryLink>
       </div>

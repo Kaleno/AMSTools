@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/current-user";
 import { readUpload } from "@/lib/uploads";
 
 const TYPES: Record<string, string> = {
@@ -10,10 +10,14 @@ const TYPES: Record<string, string> = {
 };
 
 export async function GET(_request: Request, { params }: { params: { path: string[] } }) {
-  const session = await getSession();
-  if (!session) {
+  const current = await getCurrentUser();
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (current.user.mustChangePassword) {
+    return NextResponse.json({ error: "Ganti password terlebih dahulu." }, { status: 403 });
+  }
+  const session = current.session;
 
   const relative = params.path.join("/");
   if (relative.startsWith("logos/")) {

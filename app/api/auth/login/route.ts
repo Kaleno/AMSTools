@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { signSession, sessionCookieOptions, type UserRole } from "@/lib/auth";
+import { sessionCookieOptions, signSession } from "@/lib/auth";
+import { sessionClaims } from "@/lib/session-cookie";
 
 export async function POST(request: Request) {
   try {
@@ -43,16 +44,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Akun tidak terhubung ke perusahaan." }, { status: 403 });
     }
 
-    const token = await signSession({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as UserRole,
-      tenantId: user.tenantId,
-    });
+    const token = await signSession(sessionClaims(user));
 
     const response = NextResponse.json({
       ok: true,
+      mustChangePassword: user.mustChangePassword,
       user: {
         id: user.id,
         name: user.name,

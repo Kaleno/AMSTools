@@ -11,7 +11,18 @@ export type SessionPayload = {
   name: string;
   role: UserRole;
   tenantId: string | null;
+  /** Matches User.sessionVersion. Tokens issued before this claim are treated as 0. */
+  sessionVersion: number;
 };
+
+/** Missing claim means a token issued before session versions existed (stored value 0). */
+export function readSessionVersion(value: unknown): number | null {
+  if (value == null) return 0;
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2147483647) {
+    return value;
+  }
+  return null;
+}
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -35,12 +46,15 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     if (!payload.sub || !payload.email || !payload.role) {
       return null;
     }
+    const sessionVersion = readSessionVersion(payload.sessionVersion);
+    if (sessionVersion == null) return null;
     return {
       sub: String(payload.sub),
       email: String(payload.email),
       name: String(payload.name ?? ""),
       role: payload.role as UserRole,
       tenantId: payload.tenantId ? String(payload.tenantId) : null,
+      sessionVersion,
     };
   } catch {
     return null;

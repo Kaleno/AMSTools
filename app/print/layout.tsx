@@ -8,6 +8,9 @@ export default async function PrintLayout({ children }: { children: React.ReactN
   if (!current) {
     redirect("/login");
   }
+  if (current.user.mustChangePassword) {
+    redirect("/change-password");
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-200 p-6 print:bg-white print:p-0">
