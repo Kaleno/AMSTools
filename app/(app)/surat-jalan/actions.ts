@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requirePermission, requireUser } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
@@ -27,7 +28,12 @@ function str(formData: FormData, key: string) {
 
 export async function previewSjNumber(date: string) {
   const current = await requirePermission("canManageSuratJalan");
-  return nextDocumentNumber({ tenant: current.tenant, kind: "suratJalan", date });
+  try {
+    return await nextDocumentNumber({ tenant: current.tenant, kind: "suratJalan", date });
+  } catch (error) {
+    actionErrorMessage(error, "surat-jalan.previewNumber", "Gagal membuat nomor.");
+    return "";
+  }
 }
 
 async function assertSuratJalanNumberAvailable(
@@ -39,7 +45,7 @@ async function assertSuratJalanNumberAvailable(
     where: { tenantId, noSuratJalan },
     select: { id: true },
   });
-  if (existing) throw new Error(NUMBER_TAKEN);
+  if (existing) throw new PublicError(NUMBER_TAKEN);
   return noSuratJalan;
 }
 
@@ -81,16 +87,16 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
   try {
     const created = await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
-      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      if (!locked) throw new PublicError("Invoice tidak ditemukan.");
 
       const fresh = await tx.invoice.findFirst({
         where: { id: invoice.id, tenantId: current.tenant.id },
         include: { items: true, suratJalans: { include: { items: true } } },
       });
-      if (!fresh) throw new Error("Invoice tidak ditemukan.");
+      if (!fresh) throw new PublicError("Invoice tidak ditemukan.");
 
       const blocked = lockedSuratJalanCreateError(fresh, toShip);
-      if (blocked) throw new Error(blocked);
+      if (blocked) throw new PublicError(blocked);
 
       const urutan = nextSuratJalanUrutan(fresh.suratJalans);
       const noSuratJalan = customNumber
@@ -116,7 +122,7 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
           items: {
             create: toShip.map((line) => {
               const source = freshItems.get(line.invoiceItemId);
-              if (!source) throw new Error("Ada item yang tidak termasuk invoice.");
+              if (!source) throw new PublicError("Ada item yang tidak termasuk invoice.");
               return {
                 invoiceItemId: source.id,
                 namaProduk: source.namaProduk,
@@ -145,13 +151,11 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
     revalidatePath("/surat-jalan");
     redirect(`/surat-jalan/${created.id}?notice=${encodeURIComponent("Surat jalan dibuat.")}`);
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) {
-      throw error;
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { error: NUMBER_TAKEN };
-    }
-    return { error: error instanceof Error ? error.message : "Gagal membuat Surat Jalan." };
+    return {
+      error: actionErrorMessage(error, "surat-jalan.create", "Gagal membuat Surat Jalan.", {
+        uniqueMessage: NUMBER_TAKEN,
+      }),
+    };
   }
 }
 
@@ -174,12 +178,12 @@ export async function cancelSuratJalan(suratJalanId: string, formData: FormData)
   try {
     await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, existing.invoiceId, tenant.id);
-      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      if (!locked) throw new PublicError("Invoice tidak ditemukan.");
 
       const fresh = await tx.suratJalan.findFirst({
         where: { id: existing.id, tenantId: tenant.id },
       });
-      if (!fresh) throw new Error("Surat Jalan tidak ditemukan.");
+      if (!fresh) throw new PublicError("Surat Jalan tidak ditemukan.");
 
       const blocked = suratJalanCancelBlock({
         role: current.user.role,
@@ -187,7 +191,7 @@ export async function cancelSuratJalan(suratJalanId: string, formData: FormData)
         buktiTerimaUrl: fresh.buktiTerimaUrl,
         alasan,
       });
-      if (blocked) throw new Error(blocked);
+      if (blocked) throw new PublicError(blocked);
 
       await tx.suratJalan.update({
         where: { id: fresh.id },
@@ -209,8 +213,7 @@ export async function cancelSuratJalan(suratJalanId: string, formData: FormData)
       });
     });
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "Gagal membatalkan Surat Jalan." };
+    return { error: actionErrorMessage(error, "surat-jalan.cancel", "Gagal membatalkan Surat Jalan.") };
   }
 
   revalidatePath(`/surat-jalan/${existing.id}`);
@@ -244,17 +247,17 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
     const buktiTerimaUrl = await saveProofPhoto(current.tenant.id, sj.id, file);
     await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, sj.invoice.id, current.tenant.id);
-      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      if (!locked) throw new PublicError("Invoice tidak ditemukan.");
       const fresh = await tx.suratJalan.findFirst({
         where: { id: sj.id, tenantId: current.tenant.id },
         include: { invoice: { select: { statusDokumen: true } } },
       });
-      if (!fresh) throw new Error("Surat Jalan tidak ditemukan.");
+      if (!fresh) throw new PublicError("Surat Jalan tidak ditemukan.");
       if (fresh.statusPengiriman === "BATAL") {
-        throw new Error("Surat Jalan batal tidak bisa menerima bukti.");
+        throw new PublicError("Surat Jalan batal tidak bisa menerima bukti.");
       }
       if (fresh.invoice.statusDokumen === "VOID") {
-        throw new Error("Invoice sudah dibatalkan. Bukti terima tidak bisa diunggah.");
+        throw new PublicError("Invoice sudah dibatalkan. Bukti terima tidak bisa diunggah.");
       }
       await tx.suratJalan.update({
         where: { id: fresh.id },
@@ -266,8 +269,7 @@ export async function uploadProof(suratJalanId: string, _prev: ActionState, form
       });
     });
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "Gagal unggah bukti." };
+    return { error: actionErrorMessage(error, "surat-jalan.proof", "Gagal unggah bukti.") };
   }
 
   revalidatePath(`/surat-jalan/${sj.id}`);

@@ -1,9 +1,9 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requirePermission } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
@@ -59,7 +59,12 @@ function parseLines(formData: FormData): LineInput[] {
 
 export async function previewInvoiceNumber(date: string) {
   const current = await requirePermission("canManageInvoice");
-  return nextDocumentNumber({ tenant: current.tenant, kind: "invoice", date });
+  try {
+    return await nextDocumentNumber({ tenant: current.tenant, kind: "invoice", date });
+  } catch (error) {
+    actionErrorMessage(error, "invoice.previewNumber", "Gagal membuat nomor.");
+    return "";
+  }
 }
 
 async function loadInvoice(tenantId: string, id: string) {
@@ -91,7 +96,7 @@ async function buildTotals(tenantId: string, lines: LineInput[], formData: FormD
     lines.map((line) => {
       const product = productMap.get(line.productId);
       if (!product) {
-        throw new Error("Produk tidak valid.");
+        throw new PublicError("Produk tidak valid.");
       }
       return {
         id: line.id,
@@ -134,7 +139,7 @@ function paymentFields(formData: FormData, grandTotal: number, actorId: string) 
   if (metode === "CREDIT") {
     const due = str(formData, "tanggalJatuhTempo");
     if (!due) {
-      throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
+      throw new PublicError("Tanggal jatuh tempo wajib untuk Tempo.");
     }
     const snapshot = paymentSnapshot({
       metode: "CREDIT",
@@ -221,10 +226,11 @@ export async function createInvoice(_prev: ActionState, formData: FormData): Pro
       },
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { error: "Nomor invoice sudah dipakai." };
-    }
-    return { error: error instanceof Error ? error.message : "Gagal menyimpan invoice." };
+    return {
+      error: actionErrorMessage(error, "invoice.create", "Gagal menyimpan invoice.", {
+        uniqueMessage: "Nomor invoice sudah dipakai.",
+      }),
+    };
   }
 
   revalidatePath("/invoices");
@@ -272,18 +278,18 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
 
     await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
-      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      if (!locked) throw new PublicError("Invoice tidak ditemukan.");
 
       const fresh = await tx.invoice.findFirst({
         where: { id: invoice.id, tenantId: current.tenant.id },
         include: { items: true, pembayarans: true, suratJalans: { include: { items: true } } },
       });
-      if (!fresh) throw new Error("Invoice tidak ditemukan.");
+      if (!fresh) throw new PublicError("Invoice tidak ditemukan.");
 
       const freshLocks = invoiceLocks(fresh);
-      if (freshLocks.isVoid) throw new Error("Invoice batal tidak bisa diubah.");
+      if (freshLocks.isVoid) throw new PublicError("Invoice batal tidak bisa diubah.");
       if (freshLocks.catatanOnly || missingPaymentRows(fresh)) {
-        throw new Error(
+        throw new PublicError(
           missingPaymentRows(fresh)
             ? MISSING_PAYMENT_ROWS
             : "Invoice sudah lunas / barang sudah diterima. Hanya catatan yang bisa diubah. Muat ulang halaman.",
@@ -291,7 +297,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
       }
 
       if (foreignInvoiceItemIds(resolved, new Set(fresh.items.map((item) => item.id))).length > 0) {
-        throw new Error(FOREIGN_ITEM);
+        throw new PublicError(FOREIGN_ITEM);
       }
 
       const shipped = shippedQtyByItem(fresh);
@@ -300,10 +306,10 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
         if (minQty <= 0) continue;
         const incoming = resolved.find((line) => line.id === existing.id);
         if (!incoming) {
-          throw new Error(`Item "${existing.namaProduk}" sudah masuk Surat Jalan, tidak boleh dihapus.`);
+          throw new PublicError(`Item "${existing.namaProduk}" sudah masuk Surat Jalan, tidak boleh dihapus.`);
         }
         if (incoming.qty < minQty) {
-          throw new Error(`Qty "${existing.namaProduk}" tidak boleh di bawah yang sudah dikirim (${minQty}).`);
+          throw new PublicError(`Qty "${existing.namaProduk}" tidak boleh di bawah yang sudah dikirim (${minQty}).`);
         }
       }
 
@@ -313,7 +319,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
         metode = "CASH";
       } else if (paidSum > 0 || freshLocks.paymentLocked) {
         if (requested === "CASH") {
-          throw new Error("Sudah ada pembayaran. Metode tetap Tempo.");
+          throw new PublicError("Sudah ada pembayaran. Metode tetap Tempo.");
         }
         metode = "CREDIT";
       } else {
@@ -321,13 +327,13 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
       }
 
       if (metode === "CREDIT" && Math.round(totals.grandTotal) < paidSum) {
-        throw new Error("Total tagihan tidak boleh lebih kecil dari yang sudah dibayar.");
+        throw new PublicError("Total tagihan tidak boleh lebih kecil dari yang sudah dibayar.");
       }
 
       let tanggalJatuhTempo: Date | null = null;
       if (metode === "CREDIT") {
         const due = str(formData, "tanggalJatuhTempo");
-        if (!due) throw new Error("Tanggal jatuh tempo wajib untuk Tempo.");
+        if (!due) throw new PublicError("Tanggal jatuh tempo wajib untuk Tempo.");
         tanggalJatuhTempo = parseWibDate(due);
       }
 
@@ -390,7 +396,7 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
               subtotal: line.subtotal,
             },
           });
-          if (updated.count !== 1) throw new Error(FOREIGN_ITEM);
+          if (updated.count !== 1) throw new PublicError(FOREIGN_ITEM);
         } else {
           await tx.invoiceItem.create({
             data: {
@@ -407,13 +413,11 @@ export async function updateInvoice(invoiceId: string, _prev: ActionState, formD
       }
     });
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) {
-      throw error;
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { error: "Nomor invoice sudah dipakai." };
-    }
-    return { error: error instanceof Error ? error.message : "Gagal mengubah invoice." };
+    return {
+      error: actionErrorMessage(error, "invoice.update", "Gagal mengubah invoice.", {
+        uniqueMessage: "Nomor invoice sudah dipakai.",
+      }),
+    };
   }
 
   revalidatePath("/invoices");
@@ -428,15 +432,15 @@ export async function voidInvoice(invoiceId: string): Promise<ActionState> {
   try {
     await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, invoiceId, current.tenant.id);
-      if (!locked) throw new Error("Invoice tidak ditemukan.");
+      if (!locked) throw new PublicError("Invoice tidak ditemukan.");
       const fresh = await tx.invoice.findFirst({
         where: { id: invoiceId, tenantId: current.tenant.id },
         include: { suratJalans: true },
       });
-      if (!fresh) throw new Error("Invoice tidak ditemukan.");
+      if (!fresh) throw new PublicError("Invoice tidak ditemukan.");
       const locks = invoiceLocks(fresh);
       if (!locks.canVoid) {
-        throw new Error(locks.voidBlockMessage ?? "Invoice ini tidak bisa dibatalkan.");
+        throw new PublicError(locks.voidBlockMessage ?? "Invoice ini tidak bisa dibatalkan.");
       }
       await tx.invoice.update({
         where: { id: fresh.id },
@@ -447,8 +451,7 @@ export async function voidInvoice(invoiceId: string): Promise<ActionState> {
       });
     });
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "Gagal membatalkan invoice." };
+    return { error: actionErrorMessage(error, "invoice.void", "Gagal membatalkan invoice.") };
   }
 
   revalidatePath("/invoices");
@@ -550,8 +553,7 @@ export async function recordPayment(invoiceId: string, formData: FormData): Prom
       return outcome;
     }
   } catch (error) {
-    if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "Gagal mencatat pembayaran." };
+    return { error: actionErrorMessage(error, "invoice.payment", "Gagal mencatat pembayaran.") };
   }
 
   revalidatePath("/invoices");

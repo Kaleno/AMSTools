@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requirePermission } from "@/lib/current-user";
 
 export type ActionState = { error: string | null };
@@ -20,18 +21,22 @@ export async function createCustomer(_prev: ActionState, formData: FormData): Pr
     return { error: "Nama, telepon, dan alamat pengiriman wajib diisi." };
   }
 
-  await prisma.customer.create({
-    data: {
-      tenantId: current.tenant.id,
-      namaPt,
-      picName: str(formData, "picName") || null,
-      noTelp,
-      email: str(formData, "email") || null,
-      alamatPengiriman,
-      npwp: str(formData, "npwp") || null,
-      catatan: str(formData, "catatan") || null,
-    },
-  });
+  try {
+    await prisma.customer.create({
+      data: {
+        tenantId: current.tenant.id,
+        namaPt,
+        picName: str(formData, "picName") || null,
+        noTelp,
+        email: str(formData, "email") || null,
+        alamatPengiriman,
+        npwp: str(formData, "npwp") || null,
+        catatan: str(formData, "catatan") || null,
+      },
+    });
+  } catch (error) {
+    return { error: actionErrorMessage(error, "customer.create", "Gagal menyimpan customer.") };
+  }
 
   revalidatePath("/customers");
   redirect(`/customers?notice=${encodeURIComponent("Customer tersimpan.")}`);
@@ -51,18 +56,22 @@ export async function updateCustomer(id: string, _prev: ActionState, formData: F
     return { error: "Nama, telepon, dan alamat pengiriman wajib diisi." };
   }
 
-  await prisma.customer.update({
-    where: { id },
-    data: {
-      namaPt,
-      picName: str(formData, "picName") || null,
-      noTelp,
-      email: str(formData, "email") || null,
-      alamatPengiriman,
-      npwp: str(formData, "npwp") || null,
-      catatan: str(formData, "catatan") || null,
-    },
-  });
+  try {
+    await prisma.customer.update({
+      where: { id },
+      data: {
+        namaPt,
+        picName: str(formData, "picName") || null,
+        noTelp,
+        email: str(formData, "email") || null,
+        alamatPengiriman,
+        npwp: str(formData, "npwp") || null,
+        catatan: str(formData, "catatan") || null,
+      },
+    });
+  } catch (error) {
+    return { error: actionErrorMessage(error, "customer.update", "Gagal menyimpan customer.") };
+  }
 
   revalidatePath("/customers");
   redirect(`/customers?notice=${encodeURIComponent("Customer tersimpan.")}`);
@@ -78,6 +87,10 @@ export async function deleteCustomer(id: string) {
   if (existing._count.invoices > 0) {
     return;
   }
-  await prisma.customer.delete({ where: { id } });
+  try {
+    await prisma.customer.delete({ where: { id } });
+  } catch (error) {
+    throw new PublicError(actionErrorMessage(error, "customer.delete", "Gagal menghapus customer."));
+  }
   revalidatePath("/customers");
 }

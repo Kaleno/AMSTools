@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requireRoles } from "@/lib/current-user";
 import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
 
@@ -39,17 +40,25 @@ export async function createAdmin(_prev: ActionState, formData: FormData): Promi
     return { error: "Email sudah terpakai." };
   }
 
-  await prisma.user.create({
-    data: {
-      tenantId: current.tenant!.id,
-      name,
-      email,
-      passwordHash: await bcrypt.hash(password, 12),
-      role: "ADMIN",
-      isActive: true,
-      ...perms(formData),
-    },
-  });
+  try {
+    await prisma.user.create({
+      data: {
+        tenantId: current.tenant!.id,
+        name,
+        email,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: "ADMIN",
+        isActive: true,
+        ...perms(formData),
+      },
+    });
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "admin.create", "Gagal menyimpan admin.", {
+        uniqueMessage: "Email sudah terpakai.",
+      }),
+    };
+  }
 
   revalidatePath("/admins");
   redirect(`/admins?notice=${encodeURIComponent("Akun admin tersimpan.")}`);
@@ -80,21 +89,29 @@ export async function updateAdmin(adminId: string, _prev: ActionState, formData:
     return { error: "Email sudah terpakai." };
   }
 
-  await prisma.user.update({
-    where: { id: admin.id },
-    data: {
-      name,
-      email,
-      ...perms(formData),
-      ...(password
-        ? {
-            passwordHash: await bcrypt.hash(password, 12),
-            mustChangePassword: false,
-            sessionVersion: { increment: 1 },
-          }
-        : {}),
-    },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: admin.id },
+      data: {
+        name,
+        email,
+        ...perms(formData),
+        ...(password
+          ? {
+              passwordHash: await bcrypt.hash(password, 12),
+              mustChangePassword: false,
+              sessionVersion: { increment: 1 },
+            }
+          : {}),
+      },
+    });
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "admin.update", "Gagal menyimpan admin.", {
+        uniqueMessage: "Email sudah terpakai.",
+      }),
+    };
+  }
 
   revalidatePath("/admins");
   redirect(`/admins?notice=${encodeURIComponent("Akun admin tersimpan.")}`);
@@ -106,9 +123,13 @@ export async function toggleAdminActive(adminId: string) {
     where: { id: adminId, tenantId: current.tenant!.id, role: "ADMIN" },
   });
   if (!admin) return;
-  await prisma.user.update({
-    where: { id: admin.id },
-    data: { isActive: !admin.isActive },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: admin.id },
+      data: { isActive: !admin.isActive },
+    });
+  } catch (error) {
+    throw new PublicError(actionErrorMessage(error, "admin.toggle", "Gagal mengubah status admin."));
+  }
   revalidatePath("/admins");
 }

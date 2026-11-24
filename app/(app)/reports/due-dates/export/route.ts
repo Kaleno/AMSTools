@@ -5,8 +5,18 @@ import { addWibDays, daysDiffWib, parseWibDate, wibDateString } from "@/lib/date
 import { sisaTagihan } from "@/lib/payment";
 import { dueInvoiceWhere } from "@/lib/report-filters";
 import { spreadsheetXml } from "@/lib/spreadsheet";
+import { routeFailure } from "@/lib/public-error";
 
 export async function GET(request: Request) {
+  try {
+    return await exportDueDates(request);
+  } catch (error) {
+    const failure = routeFailure(error, "report.due-dates.export", "Gagal menyiapkan file. Coba lagi.");
+    return NextResponse.json({ error: failure.message }, { status: failure.status });
+  }
+}
+
+async function exportDueDates(request: Request) {
   const current = await requirePermission("canViewReports");
   const filter = new URL(request.url).searchParams.get("filter") ?? "semua";
   const todayStr = wibDateString();

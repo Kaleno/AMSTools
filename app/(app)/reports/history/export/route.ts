@@ -5,8 +5,18 @@ import { parseWibDate, toDateInputValue, wibDateString, wibMonthRange } from "@/
 import { sisaTagihan } from "@/lib/payment";
 import { historyInvoiceWhere } from "@/lib/report-filters";
 import { spreadsheetXml } from "@/lib/spreadsheet";
+import { routeFailure } from "@/lib/public-error";
 
 export async function GET(request: Request) {
+  try {
+    return await exportHistory(request);
+  } catch (error) {
+    const failure = routeFailure(error, "report.history.export", "Gagal menyiapkan file. Coba lagi.");
+    return NextResponse.json({ error: failure.message }, { status: failure.status });
+  }
+}
+
+async function exportHistory(request: Request) {
   const current = await requirePermission("canViewReports");
   const url = new URL(request.url);
   const month = wibMonthRange();
