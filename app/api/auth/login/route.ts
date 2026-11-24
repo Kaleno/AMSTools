@@ -5,6 +5,7 @@ import { sessionCookieOptions, signSession } from "@/lib/auth";
 import { sessionClaims } from "@/lib/session-cookie";
 import { DUMMY_PASSWORD_HASH, LOGIN_FAILURE_MESSAGE, LOGIN_RATE_LIMIT_MESSAGE, loginIsRejected } from "@/lib/login-guard";
 import { clientAddress, loginRateLimiter } from "@/lib/login-rate-limit";
+import { logServerError } from "@/lib/public-error";
 
 export async function POST(request: Request) {
   try {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     response.cookies.set(cookie.name, token, cookie);
     return response;
   } catch (error) {
-    console.error("login error", error);
+    logServerError("auth.login", error);
     return NextResponse.json({ error: "Gagal masuk. Coba lagi." }, { status: 500 });
   }
 }

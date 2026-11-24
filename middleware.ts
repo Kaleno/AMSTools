@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Anda belum masuk." }, { status: 401 });
     }
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
   const session = await verifySessionToken(token);
   if (!session) {
     const response = pathname.startsWith("/api/")
-      ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      ? NextResponse.json({ error: "Anda belum masuk." }, { status: 401 })
       : NextResponse.redirect(new URL("/login", request.url));
     clearSessionOn(response);
     return response;

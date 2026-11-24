@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requireSuperAdmin } from "@/lib/current-user";
 import { passwordFrom, passwordPolicyMessage } from "@/lib/password-policy";
 
@@ -38,29 +39,37 @@ export async function createCompany(_prev: ActionState, formData: FormData): Pro
 
   const passwordHash = await bcrypt.hash(ownerPassword, 12);
 
-  await prisma.tenant.create({
-    data: {
-      namaPt,
-      tagline: tagline || null,
-      alamatPt,
-      telpPt,
-      kotaSurat,
-      users: {
-        create: {
-          name: ownerName,
-          email: ownerEmail,
-          passwordHash,
-          role: "OWNER",
-          isActive: true,
-          canViewDashboard: true,
-          canManageInvoice: true,
-          canManageSuratJalan: true,
-          canManageMasterData: true,
-          canViewReports: true,
+  try {
+    await prisma.tenant.create({
+      data: {
+        namaPt,
+        tagline: tagline || null,
+        alamatPt,
+        telpPt,
+        kotaSurat,
+        users: {
+          create: {
+            name: ownerName,
+            email: ownerEmail,
+            passwordHash,
+            role: "OWNER",
+            isActive: true,
+            canViewDashboard: true,
+            canManageInvoice: true,
+            canManageSuratJalan: true,
+            canManageMasterData: true,
+            canViewReports: true,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "company.create", "Gagal menyimpan perusahaan.", {
+        uniqueMessage: "Email Owner sudah terpakai.",
+      }),
+    };
+  }
 
   revalidatePath("/companies");
   redirect(`/companies?notice=${encodeURIComponent("Perusahaan tersimpan.")}`);
@@ -120,16 +129,24 @@ export async function updateCompany(tenantId: string, _prev: ActionState, formDa
     data.sessionVersion = { increment: 1 };
   }
 
-  await prisma.$transaction([
-    prisma.tenant.update({
-      where: { id: tenantId },
-      data: { namaPt, tagline: tagline || null, alamatPt, telpPt, kotaSurat },
-    }),
-    prisma.user.update({
-      where: { id: owner.id },
-      data,
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.tenant.update({
+        where: { id: tenantId },
+        data: { namaPt, tagline: tagline || null, alamatPt, telpPt, kotaSurat },
+      }),
+      prisma.user.update({
+        where: { id: owner.id },
+        data,
+      }),
+    ]);
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "company.update", "Gagal menyimpan perusahaan.", {
+        uniqueMessage: "Email Owner sudah terpakai.",
+      }),
+    };
+  }
 
   revalidatePath("/companies");
   redirect(`/companies?notice=${encodeURIComponent("Perusahaan tersimpan.")}`);
@@ -141,9 +158,13 @@ export async function toggleCompanyStatus(tenantId: string) {
   if (!tenant) {
     return;
   }
-  await prisma.tenant.update({
-    where: { id: tenantId },
-    data: { isActive: !tenant.isActive },
-  });
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isActive: !tenant.isActive },
+    });
+  } catch (error) {
+    throw new PublicError(actionErrorMessage(error, "company.toggle", "Gagal mengubah status perusahaan."));
+  }
   revalidatePath("/companies");
 }

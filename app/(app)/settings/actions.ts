@@ -7,6 +7,7 @@ import { requireRoles } from "@/lib/current-user";
 import { settingsOwnPasswordMessage } from "@/lib/own-password";
 import { passwordFrom } from "@/lib/password-policy";
 import { setSessionCookie } from "@/lib/session-cookie";
+import { actionErrorMessage } from "@/lib/public-error";
 import { saveTenantLogo } from "@/lib/uploads";
 
 export type ActionState = { error: string | null; ok?: boolean };
@@ -54,11 +55,12 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
     try {
       logoUrl = await saveTenantLogo(tenantId, logo);
     } catch (error) {
-      return { error: error instanceof Error ? error.message : "Gagal unggah logo." };
+      return { error: actionErrorMessage(error, "settings.logo", "Gagal unggah logo.") };
     }
   }
 
-  if (currentPassword || newPassword || confirmPassword) {
+  try {
+    if (currentPassword || newPassword || confirmPassword) {
     const currentMatches = currentPassword
       ? await bcrypt.compare(currentPassword, current.user.passwordHash)
       : false;
@@ -78,9 +80,9 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
       },
     });
     await setSessionCookie(updated);
-  }
+    }
 
-  await prisma.tenant.update({
+    await prisma.tenant.update({
     where: { id: tenantId },
     data: {
       namaPt,
@@ -104,5 +106,8 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/reports/due-dates");
-  return { error: null, ok: true };
+    return { error: null, ok: true };
+  } catch (error) {
+    return { error: actionErrorMessage(error, "settings.update", "Gagal menyimpan pengaturan.") };
+  }
 }

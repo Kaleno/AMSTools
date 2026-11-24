@@ -1,9 +1,9 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PublicError, actionErrorMessage } from "@/lib/public-error";
 import { requirePermission } from "@/lib/current-user";
 import { kodeProdukTaken, nextProductCode } from "@/lib/product-code";
 import { parseProductWorkbook, type ProductExcelRow } from "@/lib/product-excel";
@@ -58,16 +58,24 @@ export async function createProduct(_prev: ActionState, formData: FormData): Pro
   const resolved = await resolveKode(current.tenant, str(formData, "kodeProduk"));
   if ("error" in resolved) return { error: resolved.error };
 
-  await prisma.product.create({
-    data: {
-      tenantId: current.tenant.id,
-      kodeProduk: resolved.kode,
-      namaProduk,
-      satuan: str(formData, "satuan") || "Pcs",
-      hargaDefault: Math.round(hargaDefault),
-      keterangan: str(formData, "keterangan") || null,
-    },
-  });
+  try {
+    await prisma.product.create({
+      data: {
+        tenantId: current.tenant.id,
+        kodeProduk: resolved.kode,
+        namaProduk,
+        satuan: str(formData, "satuan") || "Pcs",
+        hargaDefault: Math.round(hargaDefault),
+        keterangan: str(formData, "keterangan") || null,
+      },
+    });
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "product.create", "Gagal menyimpan produk.", {
+        uniqueMessage: `Kode ${resolved.kode} sudah dipakai.`,
+      }),
+    };
+  }
 
   revalidatePath("/products");
   redirect(`/products?notice=${encodeURIComponent("Produk tersimpan.")}`);
@@ -93,16 +101,24 @@ export async function updateProduct(id: string, _prev: ActionState, formData: Fo
     return { error: `Kode ${kode} sudah dipakai.` };
   }
 
-  await prisma.product.update({
-    where: { id },
-    data: {
-      kodeProduk: kode,
-      namaProduk,
-      satuan: str(formData, "satuan") || "Pcs",
-      hargaDefault: Math.round(hargaDefault),
-      keterangan: str(formData, "keterangan") || null,
-    },
-  });
+  try {
+    await prisma.product.update({
+      where: { id },
+      data: {
+        kodeProduk: kode,
+        namaProduk,
+        satuan: str(formData, "satuan") || "Pcs",
+        hargaDefault: Math.round(hargaDefault),
+        keterangan: str(formData, "keterangan") || null,
+      },
+    });
+  } catch (error) {
+    return {
+      error: actionErrorMessage(error, "product.update", "Gagal menyimpan produk.", {
+        uniqueMessage: `Kode ${kode} sudah dipakai.`,
+      }),
+    };
+  }
 
   revalidatePath("/products");
   redirect(`/products?notice=${encodeURIComponent("Produk tersimpan.")}`);
@@ -116,7 +132,11 @@ export async function deleteProduct(id: string) {
   });
   if (!existing) return;
   if (existing._count.invoiceItems > 0) return;
-  await prisma.product.delete({ where: { id } });
+  try {
+    await prisma.product.delete({ where: { id } });
+  } catch (error) {
+    throw new PublicError(actionErrorMessage(error, "product.delete", "Gagal menghapus produk."));
+  }
   revalidatePath("/products");
 }
 
@@ -134,14 +154,24 @@ export async function previewProductImport(_prev: ImportState, formData: FormDat
   const parsed = await parseProductWorkbook(buffer);
   if (parsed.error) return { error: parsed.error };
 
-  const preview = await buildImportPreview(current.tenant, parsed.rows);
+  let preview: ImportPreviewRow[];
+  try {
+    preview = await buildImportPreview(current.tenant, parsed.rows);
+  } catch (error) {
+    return { error: actionErrorMessage(error, "product.import.preview", "Gagal membaca produk.") };
+  }
   if (preview.length === 0) {
     return { error: "Tidak ada baris yang bisa diproses." };
   }
   if (!preview.some((row) => !row.error)) {
     return { error: null, preview };
   }
-  const importToken = await saveProductImportFile(productImportRoot(), current.tenant.id, buffer);
+  let importToken: string | null;
+  try {
+    importToken = await saveProductImportFile(productImportRoot(), current.tenant.id, buffer);
+  } catch (error) {
+    return { error: actionErrorMessage(error, "product.import.preview", "Impor tidak bisa disimpan. Unggah ulang file.") };
+  }
   if (!importToken) return { error: "Impor tidak bisa disimpan. Unggah ulang file." };
   return { error: null, preview, importToken };
 }
@@ -173,7 +203,13 @@ export async function confirmProductImport(_prev: ImportState, formData: FormDat
     await deleteProductImportFile(root, current.tenant.id, token);
     return { error: parsed.error };
   }
-  const preview = await buildImportPreview(current.tenant, parsed.rows);
+  let preview: ImportPreviewRow[];
+  try {
+    preview = await buildImportPreview(current.tenant, parsed.rows);
+  } catch (error) {
+    await deleteProductImportFile(root, current.tenant.id, token);
+    return { error: actionErrorMessage(error, "product.import.confirm", "Gagal membaca produk.") };
+  }
   const valid = preview.filter((row) => !row.error);
   if (valid.length === 0) {
     await deleteProductImportFile(root, current.tenant.id, token);
@@ -206,12 +242,12 @@ export async function confirmProductImport(_prev: ImportState, formData: FormDat
           keterangan: row.keterangan || null,
         };
         if (row.action === "update") {
-          if (!row.existingId) throw new Error("Produk yang akan diubah tidak ditemukan. Unggah ulang file.");
+          if (!row.existingId) throw new PublicError("Produk yang akan diubah tidak ditemukan. Unggah ulang file.");
           const owned = await tx.product.findFirst({
             where: { id: row.existingId, tenantId: current.tenant.id },
           });
           if (!owned || owned.kodeProduk !== row.kodeProduk) {
-            throw new Error(`Kode ${row.kodeProduk} berubah. Unggah ulang file.`);
+            throw new PublicError(`Kode ${row.kodeProduk} berubah. Unggah ulang file.`);
           }
           await tx.product.update({ where: { id: owned.id }, data });
           updated += 1;
@@ -226,10 +262,11 @@ export async function confirmProductImport(_prev: ImportState, formData: FormDat
   } catch (error) {
     if (typeof error === "object" && error && "digest" in error) throw error;
     await deleteProductImportFile(root, current.tenant.id, token);
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { error: "Ada kode yang bentrok. Unggah ulang file." };
-    }
-    return { error: error instanceof Error ? error.message : "Gagal menyimpan impor." };
+    return {
+      error: actionErrorMessage(error, "product.import", "Gagal menyimpan impor.", {
+        uniqueMessage: "Ada kode yang bentrok. Unggah ulang file.",
+      }),
+    };
   }
 
   await deleteProductImportFile(root, current.tenant.id, token);

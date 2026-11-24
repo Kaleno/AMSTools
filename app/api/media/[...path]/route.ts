@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { resolveMediaPath } from "@/lib/media-path";
+import { actionErrorMessage } from "@/lib/public-error";
 import { readUpload, uploadsRoot } from "@/lib/uploads";
 
 const TYPES: Record<string, string> = {
@@ -13,7 +14,7 @@ const TYPES: Record<string, string> = {
 export async function GET(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const current = await getCurrentUser();
   if (!current) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Anda belum masuk." }, { status: 401 });
   }
   if (current.user.mustChangePassword) {
     return NextResponse.json({ error: "Ganti password terlebih dahulu." }, { status: 403 });
@@ -23,10 +24,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
   const { path: segments } = await params;
   const resolved = resolveMediaPath(segments ?? [], uploadsRoot(), new URL(request.url).pathname);
   if (!resolved.ok) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Berkas tidak ditemukan." }, { status: 404 });
   }
   if (session.role !== "SUPER_ADMIN" && session.tenantId !== resolved.tenantId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Anda tidak punya izin untuk membuka berkas ini." }, { status: 403 });
   }
 
   try {
@@ -37,7 +38,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
         "Cache-Control": "private, max-age=3600",
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } catch (error) {
+    actionErrorMessage(error, "media.read", "Berkas tidak ditemukan.");
+    return NextResponse.json({ error: "Berkas tidak ditemukan." }, { status: 404 });
   }
 }

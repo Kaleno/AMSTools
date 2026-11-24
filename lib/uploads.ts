@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { readInsideRoot, resolveMediaPath } from "@/lib/media-path";
+import { PublicError } from "@/lib/public-error";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
@@ -17,10 +18,10 @@ export function uploadsRoot() {
 export async function saveTenantLogo(tenantId: string, file: File) {
   const ext = IMAGE_TYPES[file.type];
   if (!ext) {
-    throw new Error("Format logo harus PNG, JPG, atau WEBP.");
+    throw new PublicError("Format logo harus PNG, JPG, atau WEBP.");
   }
   if (file.size > 2 * 1024 * 1024) {
-    throw new Error("Ukuran logo maksimal 2MB.");
+    throw new PublicError("Ukuran logo maksimal 2MB.");
   }
 
   const dir = path.join(UPLOAD_ROOT, "logos");
@@ -34,10 +35,10 @@ export async function saveTenantLogo(tenantId: string, file: File) {
 export async function saveProofPhoto(tenantId: string, suratJalanId: string, file: File) {
   const ext = IMAGE_TYPES[file.type];
   if (!ext) {
-    throw new Error("Format foto harus PNG, JPG, atau WEBP.");
+    throw new PublicError("Format foto harus PNG, JPG, atau WEBP.");
   }
   if (file.size > 4 * 1024 * 1024) {
-    throw new Error("Ukuran foto maksimal 4MB.");
+    throw new PublicError("Ukuran foto maksimal 4MB.");
   }
 
   const dir = path.join(UPLOAD_ROOT, "proofs", tenantId);
