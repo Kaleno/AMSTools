@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   }
 
   const invoiceRows: (string | number | null)[][] = [
-    ["No. Invoice", "Tanggal", "Customer", "Status bayar", "Total", "Terbayar", "Sisa"],
+    ["Tanggal", "Customer", "No. Invoice", "Status bayar", "Harga", "Diskon", "PPN", "Total", "Terbayar", "Sisa"],
   ];
   const itemRows: (string | number | null)[][] = [
     ["No. Invoice", "Tanggal", "Customer", "Produk", "Qty", "Satuan", "Harga", "Subtotal"],
@@ -50,10 +50,13 @@ export async function GET(request: Request) {
 
   for (const invoice of invoices) {
     invoiceRows.push([
-      invoice.noInvoice,
       wibDateString(invoice.tanggalInvoice),
       invoice.customer.namaPt,
+      invoice.noInvoice,
       invoice.statusPembayaran === "LUNAS" ? "Lunas" : invoice.statusPembayaran === "SEBAGIAN" ? "Sebagian" : "Belum lunas",
+      Math.round(invoice.subtotal),
+      invoice.useDiskon ? Math.round(invoice.diskonAmount) : 0,
+      invoice.usePpn ? Math.round(invoice.ppnAmount) : 0,
       Math.round(invoice.grandTotal),
       Math.round(invoice.jumlahTerbayar),
       sisaTagihan(invoice),
