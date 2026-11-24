@@ -8,8 +8,15 @@ import { requirePermission } from "@/lib/current-user";
 import { nextDocumentNumber } from "@/lib/document-number";
 import { parseWibDate, wibDateString } from "@/lib/datetime";
 import { lockInvoiceRow } from "@/lib/invoice-row-lock";
-import { computeStatusPengiriman, remainingByItem } from "@/lib/shipping";
+import {
+  computeStatusPengiriman,
+  lockedSuratJalanCreateError,
+  nextSuratJalanUrutan,
+  shipmentQtyError,
+} from "@/lib/shipping";
 import { saveProofPhoto } from "@/lib/uploads";
+
+const NUMBER_TAKEN = "Nomor Surat Jalan sudah dipakai.";
 
 export type ActionState = { error: string | null };
 
@@ -22,6 +29,19 @@ export async function previewSjNumber(date: string) {
   return nextDocumentNumber({ tenant: current.tenant, kind: "suratJalan", date });
 }
 
+async function assertSuratJalanNumberAvailable(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  noSuratJalan: string,
+) {
+  const existing = await tx.suratJalan.findFirst({
+    where: { tenantId, noSuratJalan },
+    select: { id: true },
+  });
+  if (existing) throw new Error(NUMBER_TAKEN);
+  return noSuratJalan;
+}
+
 export async function createSuratJalan(invoiceId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
   const current = await requirePermission("canManageSuratJalan");
   const invoice = await prisma.invoice.findFirst({
@@ -31,10 +51,10 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
   if (!invoice) return { error: "Invoice tidak ditemukan." };
   if (invoice.statusDokumen === "VOID") return { error: "Invoice batal tidak bisa dikirim." };
 
-  const remaining = remainingByItem(invoice);
   const tanggal = str(formData, "tanggalSuratJalan") || wibDateString();
-  const noSuratJalan = str(formData, "noSuratJalan");
-  if (!noSuratJalan) return { error: "Nomor Surat Jalan wajib diisi." };
+  const submittedNo = str(formData, "noSuratJalan");
+  const numberTouched = formData.get("noSuratJalanTouched") === "1";
+  const customNumber = numberTouched && submittedNo ? submittedNo : "";
 
   type Line = { invoiceItemId: string; qty: number; keterangan: string };
   let lines: Line[] = [];
@@ -44,7 +64,6 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
     return { error: "Data item tidak valid." };
   }
 
-  const remainMap = new Map(remaining.map((row) => [row.id, row]));
   const toShip = lines
     .map((line) => ({
       ...line,
@@ -55,32 +74,34 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
 
   if (toShip.length === 0) return { error: "Isi minimal satu qty pengiriman." };
 
-  for (const line of toShip) {
-    const source = remainMap.get(line.invoiceItemId);
-    if (!source) return { error: "Ada item yang tidak termasuk invoice." };
-    if (line.qty > source.remaining) {
-      return { error: `Qty "${source.namaProduk}" melebihi sisa (${source.remaining}).` };
-    }
-  }
-
-  const last = await prisma.suratJalan.aggregate({
-    where: { invoiceId: invoice.id },
-    _max: { urutan: true },
-  });
-  const urutan = (last._max.urutan ?? 0) + 1;
+  const qtyError = shipmentQtyError(invoice, toShip);
+  if (qtyError) return { error: qtyError };
 
   try {
     const created = await prisma.$transaction(async (tx) => {
       const locked = await lockInvoiceRow(tx, invoice.id, current.tenant.id);
       if (!locked) throw new Error("Invoice tidak ditemukan.");
+
       const fresh = await tx.invoice.findFirst({
         where: { id: invoice.id, tenantId: current.tenant.id },
-        select: { statusDokumen: true },
+        include: { items: true, suratJalans: { include: { items: true } } },
       });
-      if (!fresh || fresh.statusDokumen === "VOID") {
-        throw new Error("Invoice batal tidak bisa dikirim.");
-      }
+      if (!fresh) throw new Error("Invoice tidak ditemukan.");
 
+      const blocked = lockedSuratJalanCreateError(fresh, toShip);
+      if (blocked) throw new Error(blocked);
+
+      const urutan = nextSuratJalanUrutan(fresh.suratJalans);
+      const noSuratJalan = customNumber
+        ? await assertSuratJalanNumberAvailable(tx, current.tenant.id, customNumber)
+        : await nextDocumentNumber({
+            tenant: current.tenant,
+            kind: "suratJalan",
+            date: tanggal,
+            db: tx,
+          });
+
+      const freshItems = new Map(fresh.items.map((item) => [item.id, item]));
       const sj = await tx.suratJalan.create({
         data: {
           tenantId: current.tenant.id,
@@ -93,7 +114,8 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
           createdById: current.user.id,
           items: {
             create: toShip.map((line) => {
-              const source = remainMap.get(line.invoiceItemId)!;
+              const source = freshItems.get(line.invoiceItemId);
+              if (!source) throw new Error("Ada item yang tidak termasuk invoice.");
               return {
                 invoiceItemId: source.id,
                 namaProduk: source.namaProduk,
@@ -126,7 +148,7 @@ export async function createSuratJalan(invoiceId: string, _prev: ActionState, fo
       throw error;
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { error: "Nomor Surat Jalan sudah dipakai." };
+      return { error: NUMBER_TAKEN };
     }
     return { error: error instanceof Error ? error.message : "Gagal membuat Surat Jalan." };
   }

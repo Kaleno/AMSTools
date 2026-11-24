@@ -1,8 +1,14 @@
-import type { Tenant } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { Prisma, PrismaClient, Tenant } from "@prisma/client";
 import { dayOf, romanMonth, wibDayRange, yearOf } from "@/lib/datetime";
 
 type DocKind = "invoice" | "suratJalan";
+type DocDb = PrismaClient | Prisma.TransactionClient;
+
+async function resolveDb(db?: DocDb): Promise<DocDb> {
+  if (db) return db;
+  const { prisma } = await import("@/lib/prisma");
+  return prisma;
+}
 
 function padSeq(seq: number) {
   if (seq > 99) return String(seq);
@@ -26,30 +32,33 @@ function seqFromNumber(no: string, prefix: string, yyyyMmDd: string) {
 }
 
 export async function nextDocumentNumber(opts: {
-  tenant: Tenant;
+  tenant: Pick<Tenant, "id" | "invoicePrefix">;
   kind: DocKind;
   date: string;
   excludeId?: string;
+  db?: DocDb;
 }) {
   const prefix = opts.tenant.invoicePrefix;
   const { start, end } = wibDayRange(opts.date);
   const head = dayPrefix(prefix, opts.date);
+  const db = await resolveDb(opts.db);
+  const exclude = opts.excludeId ? { id: { not: opts.excludeId } } : {};
 
   if (opts.kind === "invoice") {
-    const rows = await prisma.invoice.findMany({
+    const rows = await db.invoice.findMany({
       where: {
         tenantId: opts.tenant.id,
         tanggalInvoice: { gte: start, lt: end },
-        ...(opts.excludeId ? { id: { not: opts.excludeId } } : {}),
+        ...exclude,
       },
       select: { noInvoice: true },
     });
     const max = rows.reduce((acc, row) => Math.max(acc, seqFromNumber(row.noInvoice, prefix, opts.date)), 0);
-    const extra = await prisma.invoice.findMany({
+    const extra = await db.invoice.findMany({
       where: {
         tenantId: opts.tenant.id,
         noInvoice: { startsWith: head },
-        ...(opts.excludeId ? { id: { not: opts.excludeId } } : {}),
+        ...exclude,
       },
       select: { noInvoice: true },
     });
@@ -57,14 +66,23 @@ export async function nextDocumentNumber(opts: {
     return buildDocumentNumber(prefix, opts.date, max2 + 1);
   }
 
-  const rows = await prisma.suratJalan.findMany({
+  const rows = await db.suratJalan.findMany({
     where: {
       tenantId: opts.tenant.id,
       tanggalSuratJalan: { gte: start, lt: end },
-      ...(opts.excludeId ? { id: { not: opts.excludeId } } : {}),
+      ...exclude,
     },
     select: { noSuratJalan: true },
   });
   const max = rows.reduce((acc, row) => Math.max(acc, seqFromNumber(row.noSuratJalan, prefix, opts.date)), 0);
-  return buildDocumentNumber(prefix, opts.date, max + 1);
+  const extra = await db.suratJalan.findMany({
+    where: {
+      tenantId: opts.tenant.id,
+      noSuratJalan: { startsWith: head },
+      ...exclude,
+    },
+    select: { noSuratJalan: true },
+  });
+  const max2 = extra.reduce((acc, row) => Math.max(acc, seqFromNumber(row.noSuratJalan, prefix, opts.date)), max);
+  return buildDocumentNumber(prefix, opts.date, max2 + 1);
 }
