@@ -42,13 +42,16 @@ export default async function PrintSuratJalanPage({ params }: { params: Promise<
             <p>No. PO : {sj.noPo || "-"}</p>
             {batal ? <p className="mt-1 font-bold">Status : BATAL</p> : null}
           </div>
-          <div>
+          <div className="min-w-0 max-w-[50%] break-words">
             <p>
-              <span className="font-bold">Tujuan :</span>{" "}
+              <span className="font-bold">Tujuan :</span>
+              <br />
               <span className="font-bold">{customer.namaPt}</span>
+              <br />
+              {customer.alamatPengiriman}
+              <br />
+              Telp. {customer.noTelp}
             </p>
-            <p>{customer.alamatPengiriman}</p>
-            <p>Telp. {customer.noTelp}</p>
           </div>
         </div>
 
